@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Mail, Lock, LogIn, Sparkles, School, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/mode-toggle';
+import { Badge } from '@/components/ui/badge';
 import { motion } from 'motion/react';
 
 const Login: React.FC = () => {
@@ -93,26 +94,26 @@ const Login: React.FC = () => {
             transition={{ duration: 0.5 }}
             className="w-full max-w-[400px] mx-auto"
           >
-            <div className="flex flex-col gap-1 mb-10">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20 relative w-fit">
-                  <Mail className="h-7 w-7 text-primary" />
+            <div className="flex flex-col gap-1 mb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2.5 bg-primary/10 rounded-2xl border border-primary/20 relative w-fit">
+                  <Mail className="h-6 w-6 text-primary" />
                   <div className="absolute -top-1 -right-1">
-                    <Sparkles className="h-4 w-4 text-accent animate-bounce" />
+                    <Sparkles className="h-3 w-3 text-accent animate-bounce" />
                   </div>
                 </div>
-                <h1 className="font-heading text-3xl font-black text-foreground tracking-tight">Училищни съобщения</h1>
+                <h1 className="font-heading text-2xl font-black text-foreground tracking-tight">Училищни съобщения</h1>
               </div>
-              <h2 className="text-3xl font-black text-foreground">Добре дошли</h2>
-              <p className="text-sm text-muted-foreground font-medium mt-1">Влезте във вашия акаунт, за да продължите</p>
+              <h2 className="text-2xl font-black text-foreground">Добре дошли</h2>
+              <p className="text-xs text-muted-foreground font-medium mt-0.5">Влезте във вашия акаунт, за да продължите</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2.5">
-                <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground pl-1">Имейл адрес</Label>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Имейл адрес</Label>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors">
-                    <Mail size={18} />
+                    <Mail size={16} />
                   </div>
                   <Input
                     id="email"
@@ -120,18 +121,18 @@ const Login: React.FC = () => {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="Имейл"
-                    className="h-14 pl-12 rounded-2xl bg-secondary/40 border-primary/5 focus:border-primary/30 transition-all font-bold shadow-inner text-base"
+                    className="h-12 pl-12 rounded-2xl bg-secondary/40 border-primary/5 focus:border-primary/30 transition-all font-bold shadow-inner text-sm"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 <div className="flex justify-between items-center px-1">
-                  <Label htmlFor="password" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Парола</Label>
+                  <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Парола</Label>
                 </div>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors">
-                    <Lock size={18} />
+                    <Lock size={16} />
                   </div>
                   <Input
                     id="password"
@@ -139,14 +140,14 @@ const Login: React.FC = () => {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="h-14 pl-12 pr-12 rounded-2xl bg-secondary/40 border-primary/5 focus:border-primary/30 transition-all font-bold shadow-inner text-base"
+                    className="h-12 pl-12 pr-12 rounded-2xl bg-secondary/40 border-primary/5 focus:border-primary/30 transition-all font-bold shadow-inner text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-primary transition-colors"
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
@@ -154,41 +155,87 @@ const Login: React.FC = () => {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full h-14 rounded-2xl font-black text-base bg-primary text-white shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group mt-2"
+                className="w-full h-12 rounded-2xl font-black text-sm bg-primary text-white shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group mt-2"
               >
                 {isSubmitting ? (
-                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
                     <span>Вход в системата</span>
-                    <LogIn className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    <LogIn className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>
             </form>
 
-            <div className="relative my-8">
+            <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-primary/10"></div>
               </div>
-              <div className="relative flex justify-center text-[10px] font-black uppercase tracking-[0.2em]">
+              <div className="relative flex justify-center text-[9px] font-black uppercase tracking-[0.2em]">
                 <span className="bg-card px-4 text-muted-foreground/50">Или</span>
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground text-center font-medium">
+            <p className="text-xs text-muted-foreground text-center font-medium">
               Нямате акаунт? <Link to="/register" className="text-primary hover:text-primary/80 font-black transition-colors">Създайте профил</Link>
             </p>
 
-            <div className="mt-10 p-5 rounded-3xl bg-secondary/30 border border-primary/5 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
-                <Sparkles size={12} className="text-accent" /> Тестови акаунти (парола: 123456)
+            <div className="mt-6 p-5 rounded-[2rem] bg-secondary/25 border border-primary/10 space-y-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/70 flex items-center gap-2 mb-2">
+                <Sparkles size={14} className="text-accent" /> Тестови акаунти (парола: password123)
               </p>
-              <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-muted-foreground">
-                <div className="bg-background/80 p-2.5 rounded-xl truncate border border-white/5 hover:border-primary/20 transition-colors cursor-default">admin@school.bg</div>
-                <div className="bg-background/80 p-2.5 rounded-xl truncate border border-white/5 hover:border-primary/20 transition-colors cursor-default">director@school.bg</div>
-                <div className="bg-background/80 p-2.5 rounded-xl truncate border border-white/5 hover:border-primary/20 transition-colors cursor-default">teacher@school.bg</div>
-                <div className="bg-background/80 p-2.5 rounded-xl truncate border border-white/5 hover:border-primary/20 transition-colors cursor-default">student@school.bg</div>
+              
+              <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                {/* Admin */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-primary/70 uppercase tracking-tighter pl-1">Глобален достъп</p>
+                  <div className="bg-background/90 p-3 rounded-xl border border-primary/20 hover:border-primary/40 transition-all font-bold text-sm text-foreground/90 truncate shadow-sm">
+                    admin@school.bg
+                  </div>
+                </div>
+
+                {/* School 1 */}
+                <div className="space-y-2.5 pt-1">
+                  <p className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-tighter flex items-center gap-1.5 border-t border-primary/10 pt-3 pl-1">
+                    <School size={12} /> СУ "Христо Ботев"
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center group shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">director.vasileva.su0@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Директор</Badge>
+                    </div>
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">teacher.class.8a.su0@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Учител</Badge>
+                    </div>
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">student.8a.1.su0@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Ученик</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* School 2 */}
+                <div className="space-y-2.5 pt-1">
+                  <p className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-tighter flex items-center gap-1.5 border-t border-primary/10 pt-3 pl-1">
+                    <School size={12} /> ПГКНМА „Проф. Минко Балкански“
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">director.georgieva.profe1@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Директор</Badge>
+                    </div>
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">teacher.class.8a.profe1@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Учител</Badge>
+                    </div>
+                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
+                      <span className="truncate">student.8a.1.profe1@school.bg</span>
+                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Ученик</Badge>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
