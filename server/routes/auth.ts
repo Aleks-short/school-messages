@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Database } from "sql.js";
-import { queryOne, execute } from "../database.js";
+import { queryOne, queryAll, execute } from "../database.js";
 import { signToken, verifyToken } from "../auth_utils.js";
 import bcrypt from "bcryptjs";
 
@@ -70,6 +70,28 @@ export default function authRoutes(db: Database): Router {
     );
 
     res.json({ user: mappedUser, token });
+  });
+
+  // ─── GET /api/auth/test-accounts ─────────────────────────────────────────
+  router.get("/test-accounts", (req, res) => {
+    try {
+      const admin = queryOne(db, "SELECT email, role, school FROM users WHERE role = 'admin' LIMIT 1");
+      const schoolsRows = queryAll(db, "SELECT DISTINCT school FROM users WHERE school IS NOT NULL AND school != '' LIMIT 2");
+      
+      const accounts: any[] = [];
+      if (admin) accounts.push({ ...admin, school: "Глобален достъп" });
+      
+      for (const row of schoolsRows) {
+        const s = row.school;
+        ['director', 'teacher', 'student'].forEach(r => {
+          const u = queryOne(db, "SELECT email, role, school FROM users WHERE school = ? AND role = ? LIMIT 1", [s, r]);
+          if (u) accounts.push(u);
+        });
+      }
+      res.json(accounts);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to load test accounts" });
+    }
   });
 
   return router;

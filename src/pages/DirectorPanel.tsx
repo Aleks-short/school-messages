@@ -783,17 +783,17 @@ const DirectorPanel: React.FC = () => {
                           </TableCell>
                           <TableCell className="py-4 text-center border-r border-primary/5">
                             <div className="flex flex-col items-center gap-1">
-                              <Badge variant="outline" className={`text-[10px] py-0 h-5 ${STATUS_COLORS[candidate.registrationStatus]}`}>
+                              <Badge variant="outline" className={`text-[10px] py-0.5 px-2 h-auto leading-tight whitespace-nowrap inline-flex items-center justify-center ${STATUS_COLORS[candidate.registrationStatus]}`}>
                                 {REGISTRATION_STATUS_LABELS[candidate.registrationStatus]}
                               </Badge>
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col items-center gap-1">
                                 {candidate.role === 'teacher' && candidate.pendingSubject && (
-                                  <Badge variant="outline" className="border-amber-500/20 bg-amber-500/10 text-amber-600 text-[9px] px-1">
+                                  <Badge variant="outline" className="border-amber-500/20 bg-amber-500/10 text-amber-600 text-[9px] py-0.5 px-2 h-auto leading-tight whitespace-nowrap inline-flex items-center justify-center">
                                     Чакащи предмети
                                   </Badge>
                                 )}
                                 {candidate.role === 'teacher' && candidate.pendingTeacherType && (
-                                  <Badge variant="outline" className="border-amber-500/20 bg-amber-500/10 text-amber-600 text-[9px] px-1">
+                                  <Badge variant="outline" className="border-amber-500/20 bg-amber-500/10 text-amber-600 text-[9px] py-0.5 px-2 h-auto leading-tight whitespace-nowrap inline-flex items-center justify-center">
                                     Чакащ тип
                                   </Badge>
                                 )}

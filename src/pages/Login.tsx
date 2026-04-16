@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,25 @@ import { toast } from 'sonner';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'motion/react';
+import { SERVER_URL } from '@/lib/api';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testAccounts, setTestAccounts] = useState<any[]>([]);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch(`${SERVER_URL}/api/auth/test-accounts`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setTestAccounts(data);
+      })
+      .catch(err => console.error("Could not fetch test accounts", err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,54 +199,52 @@ const Login: React.FC = () => {
               
               <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
                 {/* Admin */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-primary/70 uppercase tracking-tighter pl-1">Глобален достъп</p>
-                  <div className="bg-background/90 p-3 rounded-xl border border-primary/20 hover:border-primary/40 transition-all font-bold text-sm text-foreground/90 truncate shadow-sm">
-                    admin@school.bg
+                {testAccounts.filter(a => a.role === 'admin').length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-primary/70 uppercase tracking-tighter pl-1">Глобален достъп</p>
+                    {testAccounts.filter(a => a.role === 'admin').map((acc, i) => (
+                      <div 
+                        key={`admin-${i}`} 
+                        className="bg-background/90 p-3 rounded-xl border border-primary/20 hover:border-primary/40 transition-all font-bold text-sm text-foreground/90 truncate shadow-sm cursor-pointer"
+                        onClick={() => { setEmail(acc.email); setPassword('password123'); }}
+                      >
+                        {acc.email}
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
 
-                {/* School 1 */}
-                <div className="space-y-2.5 pt-1">
-                  <p className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-tighter flex items-center gap-1.5 border-t border-primary/10 pt-3 pl-1">
-                    <School size={12} /> СУ "Христо Ботев"
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center group shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">director.vasileva.su0@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Директор</Badge>
-                    </div>
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">teacher.class.8a.su0@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Учител</Badge>
-                    </div>
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">student.8a.1.su0@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Ученик</Badge>
-                    </div>
-                  </div>
-                </div>
-
-                {/* School 2 */}
-                <div className="space-y-2.5 pt-1">
-                  <p className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-tighter flex items-center gap-1.5 border-t border-primary/10 pt-3 pl-1">
-                    <School size={12} /> ПГКНМА „Проф. Минко Балкански“
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">director.georgieva.profe1@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Директор</Badge>
-                    </div>
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">teacher.class.8a.profe1@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Учител</Badge>
-                    </div>
-                    <div className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors">
-                      <span className="truncate">student.8a.1.profe1@school.bg</span>
-                      <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20">Ученик</Badge>
-                    </div>
-                  </div>
-                </div>
+                {/* Schools Grouped */
+                  Array.from(new Set(testAccounts.filter(a => a.role !== 'admin').map(a => a.school))).map((schoolName, i) => {
+                    const schoolAccounts = testAccounts.filter(a => a.school === schoolName);
+                    if (schoolAccounts.length === 0) return null;
+                    return (
+                      <div key={`school-${i}`} className="space-y-2.5 pt-1">
+                        <p className="text-[10px] font-black text-muted-foreground/80 uppercase tracking-tighter flex items-center gap-1.5 border-t border-primary/10 pt-3 pl-1">
+                          <School size={12} /> {schoolName}
+                        </p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {schoolAccounts.map((acc, j) => {
+                            let roleLabel = acc.role;
+                            if (acc.role === 'director') roleLabel = 'Директор';
+                            else if (acc.role === 'teacher') roleLabel = 'Учител';
+                            else if (acc.role === 'student') roleLabel = 'Ученик';
+                            return (
+                              <div 
+                                key={`acc-${i}-${j}`} 
+                                className="bg-background/90 p-3 rounded-xl border border-white/10 text-xs font-bold text-muted-foreground flex justify-between items-center shadow-sm hover:border-primary/20 transition-colors cursor-pointer"
+                                onClick={() => { setEmail(acc.email); setPassword('password123'); }}
+                              >
+                                <span className="truncate pr-2">{acc.email}</span>
+                                <Badge variant="outline" className="text-[9px] font-black py-0 h-5 bg-primary/5 text-primary border-primary/20 whitespace-nowrap">{roleLabel}</Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                }
               </div>
             </div>
           </motion.div>
