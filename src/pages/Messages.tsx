@@ -24,7 +24,7 @@ const Messages: React.FC = () => {
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>(DEFAULT_SORT);
   const [markingAll, setMarkingAll] = useState(false);
 
-  const visible = getVisibleMessages();
+  const visible = getVisibleMessages().filter(m => m.status === 'published');
   const { data: categoryOptions = [] } = useQuery({
     queryKey: ['messageCategories'],
     queryFn: () => metadataApi.getCategories(),

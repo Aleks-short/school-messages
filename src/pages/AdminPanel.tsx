@@ -2028,27 +2028,6 @@ const AdminPanel: React.FC = () => {
                   <DialogFooter className="border-t border-primary/10 p-8 pt-6 flex-row justify-between sm:justify-between items-center gap-4">
                     <div className="flex flex-wrap gap-2">
 
-
-                      {(entry.action.startsWith('Изтриване') || entry.action.includes('изтрит')) && isDeleted && snapshotData && (
-                        <div className="flex items-center">
-                          {restoredEntries.includes(entry.id) ? (
-                            <div className="flex items-center gap-2 px-6 h-11 rounded-xl bg-success/10 text-success font-black text-sm border-2 border-success/20">
-                              <Check className="h-4 w-4" />
-                              Обектът е възстановен
-                            </div>
-                          ) : (
-                            <Button
-                              variant="default"
-                              className="rounded-xl h-11 bg-success hover:bg-success/90 text-white shadow-xl shadow-success/20 font-black px-8"
-                              disabled={busyAction === `restore-${entry.id}`}
-                              onClick={() => handleRestore(entry)}
-                            >
-                              <RotateCcw className="mr-2 h-4 w-4" /> Възстанови съдържанието
-                            </Button>
-                          )}
-                        </div>
-                      )}
-
                       {(entry.targetType === 'comment' || !isDeleted) ? (
                         <Button
                           variant="outline"

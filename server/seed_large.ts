@@ -437,7 +437,7 @@ export async function seed(db: any) {
           const targets = ['all', 'students', `class:${pickRandom(CLASSES_PER_SCHOOL)}`];
           targetAudience = pickRandom(targets);
         } else if (category === 'administrative') {
-          targetAudience = pickRandom(['all', 'staff']);
+          targetAudience = pickRandom(['all', 'teachers']);
         }
 
         db.run(`INSERT INTO messages (title, content, category, status, importance, target_audience, author_id, comments_enabled, created_at, updated_at)

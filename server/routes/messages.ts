@@ -52,6 +52,7 @@ export default function messageRoutes(db: Database): Router {
         user.id,
         user.role === 'student' ? 1 : 0,
         user.role === 'teacher' ? 1 : 0,
+        ['admin', 'director', 'teacher'].includes(user.role) ? 1 : 0,
         ['director'].includes(user.role) ? 1 : 0,
         user.class || '___NONE___',
         user.class || '___NONE___',

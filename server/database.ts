@@ -112,7 +112,6 @@ export function runReminderJob(db: Database) {
         const isStaff = ['admin', 'director', 'teacher'].includes(user.role);
 
         if (targetAudience === 'all') isInAudience = true;
-        else if (targetAudience === 'staff' && isStaff) isInAudience = true;
         else if (targetAudience === 'students' && (user.role === 'student' || isStaff)) isInAudience = true;
         else if (targetAudience.startsWith('class_')) {
           if (user.class === targetAudience.replace('class_', '') || isStaff) isInAudience = true;

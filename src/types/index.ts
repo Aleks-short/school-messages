@@ -184,7 +184,7 @@ export const AUDIENCE_LABELS: Record<string, string> = {
   admin: 'Администратор',
   director: 'Директор',
   teachers: 'Учители',
-  students: 'Ученици',
+  students: 'Ученици'
 };
 
 export const COMMON_SUBJECTS = [
