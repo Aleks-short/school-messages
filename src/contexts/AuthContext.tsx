@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 interface AuthActionResult {
   success: boolean;
   user?: User;
+  registrationStatus?: User['registrationStatus'];
   error?: string;
 }
 
@@ -101,18 +102,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = useCallback(async (data: RegisterPayload) => {
     try {
       setLoading(true);
-      await usersApi.create(data);
-      return await login(data.email, data.password);
+      const created = await usersApi.create(data);
+      const found = await authApi.login(data.email, data.password, created.registrationStatus !== 'approved');
+      setUser(found);
+      return { success: true, user: found, registrationStatus: created.registrationStatus };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Неуспешна регистрация.';
       return { success: false, error: message };
     } finally {
       setLoading(false);
     }
-  }, [login]);
+  }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('dashboard_activity_page');
     localStorage.removeItem('admin-school-scope');
     setApiToken(null);
     setUser(null);

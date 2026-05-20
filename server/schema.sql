@@ -140,10 +140,3 @@ CREATE TABLE IF NOT EXISTS personal_archives (
   FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS user_preferences (
-  user_id                 INTEGER PRIMARY KEY,
-  theme                   TEXT NOT NULL DEFAULT 'system',
-  dashboard_activity_page INTEGER NOT NULL DEFAULT 1,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);

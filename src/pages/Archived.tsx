@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useMessages } from '@/contexts/MessagesContext';
-import ScrollToTop from '@/components/ScrollToTop';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArchiveRestore, Archive, Eye, Clock } from 'lucide-react';
@@ -8,8 +7,6 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { bg } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { useAuditLog } from '@/contexts/AuditLogContext';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   Select,
   SelectContent,
@@ -17,35 +14,21 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ArrowUpDown, Trash2, CheckCircle2, X, CheckSquare } from 'lucide-react';
+import { ArrowUpDown, X } from 'lucide-react';
 import { useState } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 const Archived: React.FC = () => {
-  const { getUserArchivedMessages, toggleArchive, bulkToggleArchive, unarchiveMessage, deleteMessages, refreshMessages } = useMessages();
-  const { addEntry } = useAuditLog();
-  const { user } = useAuth();
+  const { getUserArchivedMessages, toggleArchive, unarchiveMessage, refreshMessages } = useMessages();
   const archived = getUserArchivedMessages();
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     refreshMessages();
   }, [refreshMessages]);
 
-  const handleToggleArchive = async (id: string, title: string, isRestoring: boolean, e?: React.MouseEvent) => {
+  const handleToggleArchive = async (id: string, isRestoring: boolean, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -87,34 +70,6 @@ const Archived: React.FC = () => {
 
     toast.success(`${selectedIds.length} съобщения са разархивирани`);
     setSelectedIds([]);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    setIsDeleting(true);
-    try {
-      await deleteMessages(selectedIds);
-      if (user) {
-        selectedIds.forEach(id => {
-          const msg = archived.find(m => m.id === id);
-          addEntry({
-            action: 'Изтриване на съобщение',
-            performedBy: user.id,
-            performedByName: `${user.firstName} ${user.lastName}`,
-            performedBySchool: user.school,
-            targetType: 'message',
-            targetId: id,
-            details: `Изтрито съобщение "${msg?.title || id}" (групово)`,
-          });
-        });
-      }
-      toast.success(`${selectedIds.length} съобщения са изтрити окончателно`);
-      setSelectedIds([]);
-    } catch (e) {
-      toast.error('Възникна грешка при изтриването');
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   const getContentPreview = (content: string) => {
@@ -234,7 +189,7 @@ const Archived: React.FC = () => {
                         <div className="flex items-center gap-2 shrink-0 md:border-l md:pl-6 border-primary/5">
                           <Button
                             variant="secondary"
-                            onClick={(e) => handleToggleArchive(m.id, m.title, true, e)}
+                            onClick={(e) => handleToggleArchive(m.id, true, e)}
                             className="rounded-xl font-black gap-2 h-11 px-5 shadow-sm hover:scale-105 active:scale-95 transition-all text-xs"
                           >
                             <ArchiveRestore className="h-4 w-4" />
@@ -289,42 +244,12 @@ const Archived: React.FC = () => {
                   <span className="sm:hidden">Всички</span>
                 </Button>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive"
-                      className="rounded-2xl font-black h-12 px-6 flex items-center gap-2 shadow-xl shadow-destructive/20 transition-all active:scale-95"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                      <span className="hidden sm:inline">Изтрий всички</span>
-                      <span className="sm:hidden">Изтрий</span>
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="rounded-[2.5rem] border-primary/10 md:left-[calc(50%+128px)]">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="font-heading font-black text-2xl">Изтриване на {selectedIds.length} съобщения</AlertDialogTitle>
-                      <AlertDialogDescription className="text-base font-medium">
-                        Сигурни ли сте? Това действие ще изтрие окончателно тези съобщения и не може да бъде отменено.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="mt-6">
-                      <AlertDialogCancel className="rounded-2xl h-12 font-bold px-6">Отказ</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={handleBulkDelete}
-                        className="rounded-2xl h-12 font-black px-8 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Да, изтрий ги
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
               </div>
             </div>
           </Card>
         </div>
       </div>
     )}
-    <ScrollToTop />
   </div>
   );
 };

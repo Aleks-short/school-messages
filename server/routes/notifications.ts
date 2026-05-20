@@ -15,16 +15,6 @@ export default function notificationRoutes(db: Database): Router {
     res.json(rows.map(mapNotification));
   });
 
-  // ─── GET /api/notifications/:userId/unread-count ──────────────────
-  router.get("/:userId/unread-count", (req, res) => {
-    const row = queryOne(db,
-      `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0`,
-      [Number(req.params.userId)]
-    );
-
-    res.json({ count: row?.count ?? 0 });
-  });
-
   // ─── PUT /api/notifications/:id/read ──────────────────────────────
   router.put("/:id/read", (req, res) => {
     const result = execute(db, "UPDATE notifications SET read = 1 WHERE id = ?", [Number(req.params.id)]);

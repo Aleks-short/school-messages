@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useMessages } from '@/contexts/MessagesContext';
-import ScrollToTop from '@/components/ScrollToTop';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash2, FileText, Clock, ArrowUpDown, X, CheckSquare } from 'lucide-react';
@@ -35,12 +34,16 @@ const Drafts: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    deleteMessage(id);
-    toast.success('Черновата е изтрита');
-    setSelectedIds(prev => prev.filter(i => i !== id));
+    try {
+      await deleteMessage(id);
+      toast.success('Черновата е изтрита');
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    } catch {
+      toast.error('Възникна грешка при изтриването');
+    }
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -262,7 +265,6 @@ const Drafts: React.FC = () => {
           </div>
         </div>
       )}
-      <ScrollToTop />
     </div>
   );
 };

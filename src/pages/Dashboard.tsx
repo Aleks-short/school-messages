@@ -3,20 +3,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useMessages } from '@/contexts/MessagesContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
-import { ROLE_LABELS, CATEGORY_LABELS } from '@/types';
+import { ROLE_LABELS } from '@/types';
 import {
   Mail, Send, FileText, PlusCircle, Archive, Bell, ArrowRight, History,
-  Sparkles, MessageSquare, Clock, Lightbulb, ChevronLeft, ChevronRight,
+  Sparkles, MessageSquare, Clock, ChevronLeft, ChevronRight,
   ChevronDown, ChevronUp, Trash2, X
 } from 'lucide-react';
 import MessageCard from '@/components/MessageCard';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { bg } from 'date-fns/locale';
-import { Card, CardContent } from '@/components/ui/card';
-import ScrollToTop from '@/components/ScrollToTop';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -92,16 +91,8 @@ const Dashboard: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false);
   const tipIndexRef = useRef(0);
-  const [activityPage, setActivityPage] = useState(() => {
-    const saved = localStorage.getItem('dashboard_activity_page');
-    return saved ? parseInt(saved, 10) : 1;
-  });
+  const [activityPage, setActivityPage] = useState(1);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('dashboard_activity_page', activityPage.toString());
-  }, [activityPage]);
 
   const visible = getVisibleMessages();
   const published = visible.filter(m => m.status === 'published');
@@ -197,12 +188,6 @@ const Dashboard: React.FC = () => {
   const sentCount = allActivities.filter(a => a.type === 'sent').length;
   const commentCount = allActivities.filter(a => a.type === 'comment').length;
 
-  const activitySpanDays = useMemo(() => {
-    if (allActivities.length === 0) return 0;
-    const oldest = new Date(allActivities[allActivities.length - 1].date);
-    return differenceInDays(new Date(), oldest);
-  }, [allActivities]);
-
   const visibleActivities = allActivities.slice(0, activityPage * ACTIVITY_PAGE_SIZE);
   const hasMoreActivities = visibleActivities.length < allActivities.length;
 
@@ -222,7 +207,6 @@ const Dashboard: React.FC = () => {
 
   const handleBulkActivityDelete = async () => {
     if (selectedActivityIds.length === 0) return;
-    setIsDeleting(true);
     try {
       const messageIdsToDelete: string[] = [];
       const commentIdsToDelete: string[] = [];
@@ -266,7 +250,7 @@ const Dashboard: React.FC = () => {
           
           if (foundComment) {
             addEntry({
-              action: 'Изтриване на коментар',
+              action: 'Изтрит коментар',
               performedBy: user!.id,
               performedByName: `${user!.firstName} ${user!.lastName}`,
               performedBySchool: user!.school,
@@ -283,10 +267,8 @@ const Dashboard: React.FC = () => {
       toast.success('Избраните активности бяха изтрити');
       setSelectedActivityIds([]);
       await refreshMessages();
-    } catch (e) {
+    } catch {
       toast.error('Грешка при изтриването');
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -675,7 +657,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
-      <ScrollToTop />
     </div>
   );
 };

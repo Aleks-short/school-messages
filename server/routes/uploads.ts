@@ -4,8 +4,6 @@ import path from "path";
 import crypto from "crypto";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { execute } from "../database.js";
-import { type Database } from "sql.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR_NAME = "uploads";
@@ -68,7 +66,7 @@ const upload = multer({
   }
 });
 
-export default function uploadsRoutes(db: Database) {
+export default function uploadsRoutes() {
   const router = Router();
 
   router.post("/", (req, res) => {

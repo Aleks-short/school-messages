@@ -139,7 +139,7 @@ export interface AuditLogEntry {
   performedBy: string;
   performedByName: string;
   performedBySchool?: string;
-  targetType: 'message' | 'user' | 'setting' | 'class' | 'comment';
+  targetType: 'message' | 'user' | 'setting' | 'class' | 'comment' | 'draft' | 'archive';
   targetId: string;
   details: string;
   createdAt: string;
@@ -187,13 +187,6 @@ export const AUDIENCE_LABELS: Record<string, string> = {
   students: 'Ученици',
 };
 
-// Which categories each role can use
-export const ROLE_ALLOWED_CATEGORIES: Record<UserRole, MessageCategory[]> = {
-  admin: ['system', 'general', 'administrative', 'academic', 'personal'],
-  director: ['general', 'administrative', 'academic', 'personal'],
-  teacher: ['general', 'administrative', 'academic', 'personal'],
-  student: ['general', 'administrative', 'academic', 'personal'],
-};
 export const COMMON_SUBJECTS = [
   'Български език и литература',
   'Английски език',

@@ -34,7 +34,6 @@ import { NotificationSettings } from '@/types';
 import { toast } from 'sonner';
 import { Trash2, X } from 'lucide-react';
 
-import ScrollToTop from '@/components/ScrollToTop';
 
 const Notifications: React.FC = () => {
   const { 
@@ -267,23 +266,20 @@ const Notifications: React.FC = () => {
         </Card>
       ) : (
         <div className="space-y-3">
-          {sorted.map(n => (
-            <Link
-              key={n.id}
-              to={`/messages/${n.messageId}`}
-              onClick={() => markAsRead(n.id)}
-              className={`flex items-center p-5 rounded-[1.75rem] border transition-all duration-300 hover:scale-[1.01] hover:shadow-xl active:scale-95 ${
-                selectedIds.includes(n.id)
-                  ? 'bg-primary/5 border-primary/20 shadow-lg'
-                  : !n.read
-                    ? 'bg-card border-primary/10 shadow-md ring-1 ring-primary/5'
-                    : 'bg-card/40 border-transparent text-muted-foreground grayscale-[0.3]'
-              }`}
-            >
+          {sorted.map(n => {
+            const hasMessageTarget = n.messageId && n.messageId !== '0';
+            const className = `flex items-center p-5 rounded-[1.75rem] border transition-all duration-300 hover:scale-[1.01] hover:shadow-xl active:scale-95 ${
+              selectedIds.includes(n.id)
+                ? 'bg-primary/5 border-primary/20 shadow-lg'
+                : !n.read
+                  ? 'bg-card border-primary/10 shadow-md ring-1 ring-primary/5'
+                  : 'bg-card/40 border-transparent text-muted-foreground grayscale-[0.3]'
+            }`;
+            const content = (
               <div className="flex items-center gap-5 w-full">
                 <div className="shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                  <Checkbox 
-                    checked={selectedIds.includes(n.id)} 
+                  <Checkbox
+                    checked={selectedIds.includes(n.id)}
                     onCheckedChange={() => toggleSelect(n.id)}
                     className="h-6 w-6 rounded-lg border-2 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary shadow-sm"
                   />
@@ -311,8 +307,18 @@ const Notifications: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+
+            return hasMessageTarget ? (
+              <Link key={n.id} to={`/messages/${n.messageId}`} onClick={() => markAsRead(n.id)} className={className}>
+                {content}
+              </Link>
+            ) : (
+              <button key={n.id} type="button" onClick={() => markAsRead(n.id)} className={`${className} w-full text-left cursor-default`}>
+                {content}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -382,7 +388,6 @@ const Notifications: React.FC = () => {
           </div>
         </div>
       )}
-      <ScrollToTop />
     </div>
   );
 };

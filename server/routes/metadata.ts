@@ -88,11 +88,11 @@ export default function metadataRoutes(db: Database): Router {
 
     const result = execute(db, 'INSERT INTO school_classes (school, name) VALUES (?, ?)', [school, name]);
 
-    // Одит: регистриране на създаване на клас
+    // Одит: административна промяна при създаване на клас
     execute(db,
-      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-       VALUES ('Създаване на клас', ?, 'class', ?, ?)`,
-      [user.id, String(result.lastId), `Създаден клас "${name}" за ${school}`]
+      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+       VALUES ('Административна промяна', ?, 'class', ?, ?, ?)`,
+      [user.id, String(result.lastId), `Създаден клас "${name}" за ${school}`, JSON.stringify({ id: String(result.lastId), name, school })]
     );
 
     res.status(201).json({ id: String(result.lastId) });
@@ -187,8 +187,6 @@ export default function metadataRoutes(db: Database): Router {
       execute(db, `DELETE FROM personal_archives WHERE message_id IN (SELECT id FROM messages WHERE author_id = ?)`, [studentId]);
       // Настройки за уведомления
       execute(db, `DELETE FROM notification_settings WHERE user_id = ?`, [studentId]);
-      // Потребителски предпочитания
-      execute(db, `DELETE FROM user_preferences WHERE user_id = ?`, [studentId]);
       // Журнал (записи извършени от ученика)
       execute(db, `DELETE FROM audit_log WHERE performed_by = ?`, [studentId]);
       // Съобщения (самите съобщения на ученика)
@@ -220,9 +218,9 @@ export default function metadataRoutes(db: Database): Router {
     if (classTeachers.length > 0) detailParts.push(`Класни ръководители преназначени: ${demotedTeacherNames}`);
 
     execute(db,
-      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-       VALUES ('Изтриване на клас', ?, 'class', ?, ?)`,
-      [user.id, String(req.params.id), detailParts.join('. ')]
+      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+       VALUES ('Административна промяна', ?, 'class', ?, ?, ?)`,
+      [user.id, String(req.params.id), detailParts.join('. '), JSON.stringify({ id: String(req.params.id), name: className, school })]
     );
 
     res.json({

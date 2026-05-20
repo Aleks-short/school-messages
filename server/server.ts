@@ -10,7 +10,6 @@ import notificationRoutes from "./routes/notifications.js";
 import readStatusRoutes from "./routes/read-statuses.js";
 import auditRoutes from "./routes/audit.js";
 import uploadRoutes from "./routes/uploads.js";
-import preferenceRoutes from "./routes/preferences.js";
 import metadataRoutes from "./routes/metadata.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -41,8 +40,7 @@ async function main() {
   app.use("/api/notifications", notificationRoutes(db));
   app.use("/api/read-statuses", readStatusRoutes(db));
   app.use("/api/audit-log", auditRoutes(db));
-  app.use("/api/uploads", uploadRoutes(db));
-  app.use("/api/preferences", preferenceRoutes(db));
+  app.use("/api/uploads", uploadRoutes());
   app.use("/api/metadata", metadataRoutes(db));
 
   // Статични файлове за качените прикачени файлове

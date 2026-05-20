@@ -3,7 +3,7 @@ import { Message, ReadStatus, MessageStatus, Comment, Attachment } from '@/types
 import { messagesApi, readStatusesApi } from '@/lib/api';
 import { useAuth } from './AuthContext';
 import { useNotifications } from './NotificationsContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface MessagesContextType {
   messages: Message[];
@@ -24,7 +24,6 @@ interface MessagesContextType {
   getUserSentMessages: () => Message[];
   getUserArchivedMessages: () => Message[];
   toggleArchive: (messageId: string, force?: boolean) => Promise<{ alreadyArchived?: boolean; success: boolean }>;
-  bulkToggleArchive: (messageIds: string[]) => Promise<void>;
   unarchiveMessage: (messageId: string) => Promise<void>;
   isArchived: (messageId: string) => boolean;
   getArchivedAt: (messageId: string) => string | undefined;
@@ -49,6 +48,7 @@ export const MessagesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [readStatuses, setReadStatuses] = useState<ReadStatus[]>([]);
   const { user, activeSchoolScope, isGlobalAdmin } = useAuth();
   const { refreshNotifications } = useNotifications();
+  const queryClient = useQueryClient();
 
   // ─── Зареждане на съобщения чрез React Query ────────────────────────────
   const { data: fetchedMessages, refetch: refetchMessagesQuery } = useQuery({
@@ -112,12 +112,13 @@ export const MessagesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await refreshMessages();
       await refreshReadStatuses();
       await refreshNotifications();
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
       return res.id;
     } catch (err) {
       console.error('Грешка при създаване на съобщение:', err);
       return undefined;
     }
-  }, [refreshMessages, refreshReadStatuses, refreshNotifications]);
+  }, [queryClient, refreshMessages, refreshReadStatuses, refreshNotifications]);
 
   const updateMessage = useCallback(async (id: string, data: Partial<Message>) => {
     try {
@@ -135,30 +136,37 @@ export const MessagesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await refreshMessages();
       await refreshReadStatuses();
       await refreshNotifications();
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
       return true;
     } catch (err) {
       console.error('Грешка при обновяване на съобщение:', err);
       return false;
     }
-  }, [refreshMessages, refreshReadStatuses, refreshNotifications]);
+  }, [queryClient, refreshMessages, refreshReadStatuses, refreshNotifications]);
 
   const deleteMessage = useCallback(async (id: string) => {
     try {
       await messagesApi.delete(id);
+      setMessages(prev => prev.filter(message => message.id !== id));
+      setArchivedSnapshots(prev => prev.filter(message => message.id !== id));
       await refreshMessages();
       await refreshNotifications();
     } catch (err) {
       console.error('Грешка при изтриване на съобщение:', err);
+      throw err;
     }
   }, [refreshMessages, refreshNotifications]);
 
   const deleteMessages = useCallback(async (ids: string[]) => {
     try {
       await messagesApi.deleteMultiple(ids);
+      setMessages(prev => prev.filter(message => !ids.includes(message.id)));
+      setArchivedSnapshots(prev => prev.filter(message => !ids.includes(message.id)));
       await refreshMessages();
       await refreshNotifications();
     } catch (err) {
       console.error('Грешка при изтриване на съобщения:', err);
+      throw err;
     }
   }, [refreshMessages, refreshNotifications]);
 
@@ -195,16 +203,6 @@ export const MessagesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await refreshArchives();
     } catch (err) {
       console.error('Грешка при премахване от архива:', err);
-    }
-  }, [user, refreshArchives]);
-
-  const bulkToggleArchive = useCallback(async (messageIds: string[]) => {
-    if (!user) return;
-    try {
-      await messagesApi.bulkArchive(messageIds);
-      await refreshArchives();
-    } catch (err) {
-      console.error('Грешка при групово архивиране:', err);
     }
   }, [user, refreshArchives]);
 
@@ -404,7 +402,7 @@ export const MessagesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <MessagesContext.Provider value={{
       messages, readStatuses, createMessage, updateMessage, deleteMessage, deleteMessages,
       setMessageStatus, markAsRead, markAllAsRead, confirmRead, isRead, isConfirmed,
-      getVisibleMessages, getReadersForMessage, getUserDrafts, getUserSentMessages, getUserArchivedMessages, toggleArchive, bulkToggleArchive, unarchiveMessage, isArchived, getArchivedAt, addComment,
+      getVisibleMessages, getReadersForMessage, getUserDrafts, getUserSentMessages, getUserArchivedMessages, toggleArchive, unarchiveMessage, isArchived, getArchivedAt, addComment,
       deleteComment, updateComment,
       refreshMessages, refreshArchives
     }}>

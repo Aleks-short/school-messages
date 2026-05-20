@@ -4,24 +4,24 @@ import { useMessages } from '@/contexts/MessagesContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
-import { CATEGORY_LABELS, STATUS_LABELS, AUDIENCE_LABELS, IMPORTANCE_LABELS, ROLE_LABELS } from '@/types';
+import { CATEGORY_LABELS, STATUS_LABELS, IMPORTANCE_LABELS, ROLE_LABELS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import {
-  ArrowLeft, Download, ExternalLink, Calendar,
-  Trash2, Archive, ArchiveRestore, Send, FileText, Check, MoreVertical,
+  ArrowLeft, Download,
+  Trash2, Archive, ArchiveRestore, Send, Check,
   Edit, MessageSquare, AlertCircle, Paperclip, AlertTriangle, CheckCircle2, Clock, Link, X, Users
 } from 'lucide-react';
-import { SERVER_URL, uploadsApi, messagesApi, readStatusesApi } from '@/lib/api';
+import { SERVER_URL, messagesApi, readStatusesApi } from '@/lib/api';
 import UserHoverCard from '@/components/UserHoverCard';
 import { format } from 'date-fns';
 import { bg } from 'date-fns/locale';
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
-import { Attachment } from '@/types';
+import { Attachment, Message } from '@/types';
 import AudienceDisplay from '@/components/AudienceDisplay';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
@@ -38,24 +38,24 @@ import {
 
 const UPLOADS_DIR = 'uploads';
 
+const getMessageIdFromPath = (value?: string) => value ? value.replace(/^m/, '') : '';
+
 const MessageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
     messages, markAsRead, confirmRead, isConfirmed,
-    deleteMessage, setMessageStatus, getReadersForMessage,
+    deleteMessage, setMessageStatus,
     addComment, deleteComment, updateComment, toggleArchive, isArchived, getArchivedAt, refreshArchives, getUserArchivedMessages
   } = useMessages();
   const [searchParams] = useSearchParams();
   const isArchiveView = searchParams.get('archive') === 'true';
-  const { unreadCount, markAsReadByMessage } = useNotifications();
+  const { markAsReadByMessage } = useNotifications();
   const { user, allUsers } = useAuth();
   const { addEntry } = useAuditLog();
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
-  const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
   const [commentLinks, setCommentLinks] = useState<string[]>([]);
   const [messageReaders, setMessageReaders] = useState<any[]>([]); // New state for all readers
@@ -63,28 +63,58 @@ const MessageDetail: React.FC = () => {
   const [showCommentInteractive, setShowCommentInteractive] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string, name: string } | null>(null);
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+  const [fallbackMessage, setFallbackMessage] = useState<Message | null>(null);
+  const [isLoadingMessage, setIsLoadingMessage] = useState(false);
+  const [messageLoadFailed, setMessageLoadFailed] = useState(false);
 
   const archivedMessages = getUserArchivedMessages();
-  const message = isArchiveView
+  const contextMessage = isArchiveView
     ? archivedMessages.find(m => m.id === id)
     : messages.find(m => m.id === id);
+  const resolvedMessageId = getMessageIdFromPath(id);
+  const displayMessage = contextMessage || fallbackMessage;
+  const shouldLoadMessage = !contextMessage && Boolean(resolvedMessageId);
 
-  const isAuthor = user?.id === message?.authorId;
+  useEffect(() => {
+    const loadMessage = async () => {
+      if (contextMessage || !resolvedMessageId) {
+        setIsLoadingMessage(false);
+        setMessageLoadFailed(false);
+        return;
+      }
+      setMessageLoadFailed(false);
+      setIsLoadingMessage(true);
+      try {
+        const fetched = await messagesApi.getById(resolvedMessageId);
+        setFallbackMessage(fetched || null);
+      } catch (err) {
+        console.error('Failed to load message by id:', err);
+        setFallbackMessage(null);
+        setMessageLoadFailed(true);
+      } finally {
+        setIsLoadingMessage(false);
+      }
+    };
+
+    loadMessage();
+  }, [contextMessage, resolvedMessageId]);
+
+  const isAuthor = user?.id === displayMessage?.authorId;
   const isAdmin = user && ['admin', 'director'].includes(user?.role || '');
 
   useEffect(() => {
-    if (message && message.status === 'published' && !isArchiveView) {
-      markAsRead(message.id);
-      markAsReadByMessage(message.id);
+    if (displayMessage && displayMessage.status === 'published' && !isArchiveView) {
+      markAsRead(displayMessage.id);
+      markAsReadByMessage(displayMessage.id);
     }
-  }, [message, isArchiveView, markAsRead, markAsReadByMessage]);
+  }, [displayMessage, isArchiveView, markAsRead, markAsReadByMessage]);
 
   // Fetch all readers if authorized
   useEffect(() => {
     const fetchReaders = async () => {
-      if (message && (isAdmin || isAuthor)) {
+      if (displayMessage && (isAdmin || isAuthor)) {
         try {
-          const data = await readStatusesApi.getByMessage(message.id);
+          const data = await readStatusesApi.getByMessage(displayMessage.id);
           setMessageReaders(data);
         } catch (err) {
           console.error("Failed to fetch readers:", err);
@@ -92,9 +122,17 @@ const MessageDetail: React.FC = () => {
       }
     };
     fetchReaders();
-  }, [message, isAdmin, isAuthor]);
+  }, [displayMessage, isAdmin, isAuthor]);
 
-  if (!message) {
+  if (!displayMessage && !messageLoadFailed && (isLoadingMessage || shouldLoadMessage)) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Зареждане на съобщението...</p>
+      </div>
+    );
+  }
+
+  if (!displayMessage) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Съобщението не е намерено</p>
@@ -105,11 +143,12 @@ const MessageDetail: React.FC = () => {
     );
   }
 
-  const readers = getReadersForMessage(message.id);
-  const needsConfirmation = message.importance === 'high';
-  const comments = message.comments || [];
-  const archived = isArchived(message.id);
-  const archivedDate = getArchivedAt(message.id);
+  const message = displayMessage;
+
+  const needsConfirmation = displayMessage.importance === 'high';
+  const comments = displayMessage.comments || [];
+  const archived = isArchived(displayMessage.id);
+  const archivedDate = getArchivedAt(displayMessage.id);
 
   const canDeleteComment = (commentAuthorId: string) => {
     if (!user) return false;
@@ -165,7 +204,7 @@ const MessageDetail: React.FC = () => {
     const comment = message.comments?.find(c => c.id === commentId);
     if (comment) {
       addEntry({
-        action: 'Изтриване на коментар',
+        action: 'Изтрит коментар',
         performedBy: user!.id,
         performedByName: `${user!.firstName} ${user!.lastName}`,
         performedBySchool: user!.school,
@@ -177,7 +216,6 @@ const MessageDetail: React.FC = () => {
     }
     await deleteComment(commentId);
     toast.success('Коментарът е изтрит');
-    setCommentToDelete(null);
   };
 
   const handleUpdateComment = async (commentId: string) => {
@@ -303,8 +341,6 @@ const MessageDetail: React.FC = () => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
-
-  const importanceBorder = message.importance === 'high' ? 'border-l-4 border-l-importance-high' : '';
 
   const handleDownload = async (url: string, filename: string) => {
     try {

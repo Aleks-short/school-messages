@@ -1,10 +1,4 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, "data", "school.db");
 
 // --- Configuration ---
 const SCHOOLS = [
@@ -201,7 +195,6 @@ export async function seed(db: any) {
   // Clear existing data
   console.log("🧹 Clearing existing data...");
   db.run("DELETE FROM personal_archives");
-  db.run("DELETE FROM user_preferences");
   db.run("DELETE FROM message_edits");
   db.run("DELETE FROM read_statuses");
   db.run("DELETE FROM notifications");
@@ -246,7 +239,6 @@ export async function seed(db: any) {
       ]);
     const id = db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
     db.run(`INSERT INTO notification_settings (user_id) VALUES (?)`, [id]);
-    db.run(`INSERT OR IGNORE INTO user_preferences (user_id) VALUES (?)`, [id]);
 
     const info: UserInfo = {
       id, email: opts.email, firstName: opts.firstName, lastName: opts.lastName,
@@ -631,7 +623,27 @@ export async function seed(db: any) {
       [msgId, msgObj.author_id, JSON.stringify({ title: true, content: false }), editDate]);
 
     addAudit("Редакция на съобщение", msgObj.author_id, "message", String(msgId),
-      `Редактирано съобщение "${newTitle}"`, editDate);
+      `Редактирано съобщение "${newTitle}"`, editDate, JSON.stringify({
+        previous: {
+          id: String(msgId),
+          title: msgObj.title,
+          content: msgObj.content,
+          category: msgObj.category,
+          importance: msgObj.importance,
+          targetAudience: msgObj.target_audience,
+        },
+        current: {
+          id: String(msgId),
+          title: newTitle,
+          content: msgObj.content,
+          category: msgObj.category,
+          importance: msgObj.importance,
+          targetAudience: msgObj.target_audience,
+        },
+        changes: {
+          title: { label: "Заглавие", from: msgObj.title, to: newTitle },
+        },
+      }));
 
     // Notify users about edit
     const school = db.exec(`SELECT school FROM users WHERE id = ${msgObj.author_id}`)[0]?.values[0]?.[0] as string;
@@ -710,14 +722,22 @@ export async function seed(db: any) {
   // 6. DELETED COMMENT AUDIT ENTRIES
   // ═══════════════════════════════════════════════════════════════════
   console.log("💬 Creating deleted comment audit entries...");
-  // Pick some existing comments and create audit entries for "deleted" ones
-  const someComments = db.exec(`SELECT c.id, c.author_id, c.content, m.title FROM comments c JOIN messages m ON c.message_id = m.id LIMIT 3`);
+  // Pick some existing comments, snapshot them, then actually delete them.
+  const someComments = db.exec(`SELECT c.id, c.message_id, c.author_id, c.content, m.title, u.first_name || ' ' || u.last_name AS author_name FROM comments c JOIN messages m ON c.message_id = m.id JOIN users u ON c.author_id = u.id LIMIT 3`);
   if (someComments.length > 0) {
     for (const row of someComments[0].values) {
-      const [commentId, authorId, _content, msgTitle] = row;
+      const [commentId, messageId, authorId, content, msgTitle, authorName] = row;
       const delDate = formatDate(getRandomDate(new Date(END_DATE.getTime() - 14 * 86400000), END_DATE));
       addAudit("Изтрит коментар", authorId as number, "comment", String(commentId),
-        `Изтрит коментар от съобщение "${msgTitle}"`, delDate);
+        `Изтрит коментар от съобщение "${msgTitle}"`, delDate, JSON.stringify({
+          messageId: String(messageId),
+          messageTitle: msgTitle,
+          authorId: String(authorId),
+          authorName,
+          content,
+        }));
+      db.run(`DELETE FROM attachments WHERE comment_id = ?`, [commentId]);
+      db.run(`DELETE FROM comments WHERE id = ?`, [commentId]);
     }
   }
 
@@ -773,7 +793,27 @@ export async function seed(db: any) {
 
       // Audit for draft creation
       addAudit("Публикуване на съобщение", user.id, "draft", String(draftId),
-        `Създадена чернова: "${draft.title}"`, dDate);
+        `Създадена чернова: "${draft.title}"`, dDate,
+        JSON.stringify({
+          id: String(draftId),
+          title: draft.title,
+          content: draft.content,
+          category: draft.category,
+          status: 'draft',
+          importance: 'normal',
+          targetAudience: targetAudience,
+          authorId: String(user.id),
+          authorName: `${user.firstName} ${user.lastName}`,
+          authorRole: user.role,
+          authorSchool: user.school,
+          commentsEnabled: true,
+          createdAt: dDate,
+          updatedAt: dDate,
+          attachments: [],
+          comments: [],
+          editHistory: [],
+          links: []
+        }));
     }
   }
   console.log(`✅ Created ${draftCounter} drafts.`);
@@ -826,7 +866,7 @@ export async function seed(db: any) {
         [user.id, msgId, snapshot, archDate]);
 
       addAudit("Публикуване на съобщение", user.id, "archive", String(msgId),
-        `Потребител ${user.firstName} ${user.lastName} архивира съобщение #${msgId}`, archDate);
+        `Потребител ${user.firstName} ${user.lastName} архивира съобщение #${msgId}`, archDate, snapshot);
       archiveCounter++;
     }
   }

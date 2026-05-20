@@ -25,6 +25,7 @@ import NotFound from "./pages/NotFound";
 import RegistrationStatus from "./pages/RegistrationStatus";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,14 +46,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const App = () => (
   <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <NotificationsProvider>
-              <MessagesProvider>
-                <AuditLogProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <ScrollToTop />
+              <NotificationsProvider>
+                <MessagesProvider>
+                  <AuditLogProvider>
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/login" element={<Login />} />

@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CATEGORY_LABELS, IMPORTANCE_LABELS, MessageCategory, MessageImportance } from '@/types';
 import { metadataApi } from '@/lib/api';
 import { RotateCcw, Search, Sliders, SortAsc, SortDesc, CheckCircle2 } from 'lucide-react';
-import ScrollToTop from '@/components/ScrollToTop';
 import { Button } from '@/components/ui/button';
 import MessageCard from '@/components/MessageCard';
 import { CheckCheck } from 'lucide-react';
@@ -324,7 +323,6 @@ const Messages: React.FC = () => {
           ))}
         </div>
       )}
-      <ScrollToTop />
     </div>
   );
 };

@@ -99,7 +99,8 @@ export default function messageRoutes(db: Database): Router {
                  OR (m.target_audience = 'class:' || ?)
                  OR (m.target_audience = ?)
                  OR (m.target_audience LIKE 'subject:%' AND ? = 1 AND INSTR(?, SUBSTR(m.target_audience, 9)) > 0)
-                 OR (m.target_audience = 'user:' || ?) OR (m.target_audience LIKE 'users:%' AND INSTR(',' || REPLACE(m.target_audience, 'users:', '') || ',', ',' || ? || ',') > 0))`;
+                 OR (m.target_audience = 'user:' || ?) OR (m.target_audience LIKE 'users:%' AND INSTR(',' || REPLACE(m.target_audience, 'users:', '') || ',', ',' || ? || ',') > 0)
+                 OR (? = 1))`;
       params.push(
         user.id,
         user.role === 'student' ? 1 : 0,
@@ -110,7 +111,8 @@ export default function messageRoutes(db: Database): Router {
         user.role === 'teacher' ? 1 : 0,
         user.subject || '',
         user.id,
-        user.id
+        user.id,
+        user.role === 'director' ? 1 : 0
       );
     }
 
@@ -122,7 +124,7 @@ export default function messageRoutes(db: Database): Router {
 
   // ─── POST /api/messages ───────────────────────────────────────────
   router.post("/", (req, res) => {
-    const { title, content, category, status, importance, targetAudience, target_audience, authorId, commentsEnabled } = req.body;
+    const { id, title, content, category, status, importance, targetAudience, target_audience, authorId, commentsEnabled, createdAt, updatedAt } = req.body;
 
     // Проверка за задължителни полета (title и content могат да са празни низове)
     if (title === undefined || title === null || !category || authorId === undefined || authorId === null) {
@@ -140,23 +142,48 @@ export default function messageRoutes(db: Database): Router {
       }
     }
 
+    const explicitId = id !== undefined && id !== null && String(id).trim() !== '' ? Number(id) : null;
+    if (explicitId !== null && !Number.isInteger(explicitId)) {
+      return res.status(400).json({ error: "Невалидно ID за възстановяване." });
+    }
+
+    const existingWithId = explicitId !== null ? queryOne(db, "SELECT id FROM messages WHERE id = ?", [explicitId]) : null;
+    if (existingWithId) {
+      return res.status(409).json({ error: "Съобщение с това ID вече съществува." });
+    }
+
+    const columns = ['title', 'content', 'category', 'status', 'importance', 'target_audience', 'author_id', 'links', 'comments_enabled'];
+    const values: any[] = [
+      title,
+      content || "",
+      category,
+      status ?? "draft",
+      importance ?? "normal",
+      finalTargetAudience,
+      finalAuthorId,
+      req.body.links ? JSON.stringify(req.body.links) : null,
+      commentsEnabled !== undefined ? (commentsEnabled ? 1 : 0) : 1
+    ];
+
+    if (explicitId !== null) {
+      columns.unshift('id');
+      values.unshift(explicitId);
+    }
+    if (createdAt) {
+      columns.push('created_at');
+      values.push(toSQLiteDate(createdAt));
+    }
+    if (updatedAt) {
+      columns.push('updated_at');
+      values.push(toSQLiteDate(updatedAt));
+    }
+
     const result = execute(db,
-      `INSERT INTO messages (title, content, category, status, importance, target_audience, author_id, links, comments_enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        title,
-        content || "",
-        category,
-        status ?? "draft",
-        importance ?? "normal",
-        finalTargetAudience,
-        finalAuthorId,
-        req.body.links ? JSON.stringify(req.body.links) : null,
-        commentsEnabled !== undefined ? (commentsEnabled ? 1 : 0) : 1
-      ]
+      `INSERT INTO messages (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      values
     );
 
-    const messageId = result.lastId;
+    const messageId = explicitId ?? result.lastId;
 
     // Свързване на прикачените файлове
     const attachmentsList = req.body.attachments || [];
@@ -191,7 +218,8 @@ export default function messageRoutes(db: Database): Router {
 
   // ─── PUT /api/messages/:id ────────────────────────────────────────
   router.put("/:id", (req, res) => {
-    const { title, content, category, status, importance, targetAudience, target_audience, commentsEnabled, editedBy, changes } = req.body;
+    const { title, content, category, status, importance, targetAudience, target_audience, commentsEnabled, editedBy } = req.body;
+    const currentUser = getUserFromRequest(db, req);
 
     // Проверка за валидно ID (може да идва с 'm' префикс от фронтенда понякога, но тук очакваме число)
     const rawId = req.params.id;
@@ -201,32 +229,60 @@ export default function messageRoutes(db: Database): Router {
     if (!existing) return res.status(404).json({ error: "Съобщението не е намерено." });
 
     const finalTargetAudience = targetAudience || target_audience || existing.target_audience;
+    const nextTitle = title ?? existing.title;
+    const nextContent = content ?? existing.content;
+    const nextCategory = category ?? existing.category;
+    const nextStatus = status ?? existing.status;
+    const nextImportance = importance ?? existing.importance;
+    const nextLinks = req.body.links !== undefined ? JSON.stringify(req.body.links) : existing.links;
+    const nextCommentsEnabled = commentsEnabled !== undefined ? (commentsEnabled ? 1 : 0) : existing.comments_enabled;
+    const attachmentsList = req.body.attachments || [];
+    const attachmentsChanged = req.body.attachments !== undefined && hasAttachmentChanges(db, cleanId, attachmentsList);
+    const hasStoredChanges =
+      nextTitle !== existing.title ||
+      nextContent !== existing.content ||
+      nextCategory !== existing.category ||
+      nextStatus !== existing.status ||
+      nextImportance !== existing.importance ||
+      finalTargetAudience !== existing.target_audience ||
+      (nextLinks ?? null) !== (existing.links ?? null) ||
+      nextCommentsEnabled !== existing.comments_enabled ||
+      attachmentsChanged;
+
+    if (!hasStoredChanges) {
+      return res.json({ message: "Няма промени по съобщението." });
+    }
+
+    const isNewPublication = nextStatus === "published" && existing.status !== "published";
+    const isEditOfPublished = nextStatus === "published" && existing.status === "published";
+    const previousSnapshot = isEditOfPublished ? getEnrichedMessageById(db, cleanId) : null;
 
     execute(db,
       `UPDATE messages SET title = ?, content = ?, category = ?, status = ?, importance = ?, target_audience = ?, links = ?, comments_enabled = ?, updated_at = datetime('now')
        WHERE id = ?`,
       [
-        title ?? existing.title,
-        content ?? existing.content,
-        category ?? existing.category,
-        status ?? existing.status,
-        importance ?? existing.importance,
+        nextTitle,
+        nextContent,
+        nextCategory,
+        nextStatus,
+        nextImportance,
         finalTargetAudience,
-        req.body.links ? JSON.stringify(req.body.links) : existing.links,
-        commentsEnabled !== undefined ? (commentsEnabled ? 1 : 0) : existing.comments_enabled,
+        nextLinks,
+        nextCommentsEnabled,
         cleanId,
       ]
     );
 
     // Запис в историята на редакциите само ако съобщението вече е било публикувано
-    if (existing.status === "published") {
-      const editorId = req.headers['x-user-id'] || existing.author_id; // Вземаме ID на редактора
+    if (isEditOfPublished) {
+      const editorId = editedBy || currentUser?.id || req.headers['x-user-id'] || existing.author_id; // Вземаме ID на редактора
       const editChanges = JSON.stringify({
-        title: title !== existing.title,
-        content: content !== existing.content,
-        category: category !== existing.category,
-        importance: importance !== existing.importance,
-        targetAudience: finalTargetAudience !== existing.target_audience
+        title: nextTitle !== existing.title,
+        content: nextContent !== existing.content,
+        category: nextCategory !== existing.category,
+        importance: nextImportance !== existing.importance,
+        targetAudience: finalTargetAudience !== existing.target_audience,
+        attachments: attachmentsChanged
       });
       execute(db,
         `INSERT INTO message_edits (message_id, edited_by, changes) VALUES (?, ?, ?)`,
@@ -238,7 +294,7 @@ export default function messageRoutes(db: Database): Router {
     if (req.body.attachments) {
       // За простота: изтриваме старите и добавяме новите
       execute(db, "DELETE FROM attachments WHERE message_id = ?", [cleanId]);
-      for (const att of req.body.attachments) {
+      for (const att of attachmentsList) {
         const attPath = cleanPath(att.path || att.url || "");
         execute(db,
           `INSERT INTO attachments (message_id, name, size, type, path) VALUES (?, ?, ?, ?, ?)`,
@@ -247,24 +303,53 @@ export default function messageRoutes(db: Database): Router {
       }
     }
 
+    if (isEditOfPublished) {
+      const currentSnapshot = getEnrichedMessageById(db, cleanId);
+      const editAuditData = buildMessageEditAuditData(previousSnapshot, currentSnapshot);
+      const editorId = editedBy || currentUser?.id || req.headers['x-user-id'] || existing.author_id;
+      execute(db,
+        `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+         VALUES ('Редакция на съобщение', ?, 'message', ?, ?, ?)`,
+        [
+          Number(editorId),
+          String(cleanId),
+          `Редактирано съобщение "${currentSnapshot?.title || title || existing.title}"`,
+          JSON.stringify(editAuditData)
+        ]
+      );
+    }
+
+    if (isNewPublication) {
+      const catRow = nextCategory ? queryOne(db, 'SELECT label FROM message_categories WHERE key = ?', [nextCategory]) : null;
+      const catLabel = catRow ? catRow.label : (nextCategory || 'Общи');
+      const currentSnapshot = getEnrichedMessageById(db, cleanId);
+      execute(db,
+        `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+         VALUES ('Публикуване на съобщение', ?, 'message', ?, ?, ?)`,
+        [
+          existing.author_id,
+          String(cleanId),
+          `Заглавие: "${nextTitle}" | Категория: ${catLabel} | Важност: ${nextImportance || 'нормално'}`,
+          currentSnapshot ? JSON.stringify(currentSnapshot) : null
+        ]
+      );
+    }
+
     // Ако съобщението се публикува сега, го маркираме като прочетено за автора
-    if (status === "published" || existing.status === "published") {
+    if (nextStatus === "published") {
       execute(db,
         "INSERT OR IGNORE INTO read_statuses (message_id, user_id) VALUES (?, ?)",
         [cleanId, existing.author_id]
       );
-
-      const isNewPublication = status === "published" && existing.status !== "published";
-      const isEditOfPublished = status === "published" && existing.status === "published";
 
       if (isNewPublication || isEditOfPublished) {
         notifyUsersAboutMessage(
           db,
           cleanId,
           existing.author_id,
-          title ?? existing.title,
-          category ?? existing.category,
-          importance ?? existing.importance,
+          nextTitle,
+          nextCategory,
+          nextImportance,
           finalTargetAudience,
           isEditOfPublished
         );
@@ -311,11 +396,31 @@ export default function messageRoutes(db: Database): Router {
     const { ids } = req.body;
     if (!Array.isArray(ids)) return res.status(400).json({ error: "Невалидни данни. Очаква се масив от ID-та." });
 
+    const currentUser = getUserFromRequest(db, req);
+    if (!currentUser) return res.status(401).json({ error: "Неавторизиран достъп." });
+
+    const allowedIds: number[] = [];
     for (const id of ids) {
-      deleteMessageWithRelations(db, Number(id));
+      const msgId = Number(id);
+      const existing = queryOne(db, "SELECT m.*, u.school AS author_school FROM messages m JOIN users u ON m.author_id = u.id WHERE m.id = ?", [msgId]);
+      if (!existing) continue;
+
+      const canDeleteAsGlobalAdmin = isGlobalAdmin(currentUser);
+      const canDeleteAsDirector = isDirector(currentUser)
+        && existing.author_school === currentUser.school
+        && existing.category !== 'personal'
+        && !isPersonalAudience(existing.target_audience);
+      const canDeleteAsAuthor = Number(existing.author_id) === Number(currentUser.id);
+
+      if (!canDeleteAsGlobalAdmin && !canDeleteAsDirector && !canDeleteAsAuthor) continue;
+      allowedIds.push(msgId);
     }
 
-    res.json({ message: `${ids.length} съобщения бяха изтрити успешно.` });
+    for (const msgId of allowedIds) {
+      deleteMessageWithRelations(db, msgId);
+    }
+
+    res.json({ message: `${allowedIds.length} съобщения бяха изтрити успешно.` });
   });
 
   function deleteMessageWithRelations(db: Database, msgId: number) {
@@ -369,6 +474,12 @@ export default function messageRoutes(db: Database): Router {
     );
 
     const commentId = result.lastId;
+
+    // Коментарът означава, че потребителят е прочел съобщението.
+    execute(db,
+      `INSERT OR IGNORE INTO read_statuses (message_id, user_id) VALUES (?, ?)`,
+      [Number(req.params.id), authorId]
+    );
 
     // Свързване на прикачените файлове към коментара
     const attachmentsList = req.body.attachments || [];
@@ -445,29 +556,6 @@ export default function messageRoutes(db: Database): Router {
     res.json({ message: "Коментарът е обновен." });
   });
 
-  // ─── POST /api/messages/:id/read ──────────────────────────────────
-  router.post("/:id/read", (req, res) => {
-    const user = getUserFromRequest(db, req);
-    if (!user) return res.status(401).json({ error: "Неавторизиран достъп." });
-
-    const msgId = Number(req.params.id);
-    const msg = queryOne(db, "SELECT * FROM messages WHERE id = ?", [msgId]);
-    if (!msg) return res.status(404).json({ error: "Съобщението не е намерено." });
-
-    execute(db, "INSERT OR IGNORE INTO read_statuses (message_id, user_id) VALUES (?, ?)", [msgId, user.id]);
-
-    // Одитен журнал: Потвърждаване на важни съобщения
-    if (msg.importance === 'high') {
-      execute(db,
-        `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['Потвърждаване на важно съобщение', user.id, 'message', String(msgId), `Потребител ${user.first_name} ${user.last_name} потвърди, че е прочел "${msg.title}"`]
-      );
-    }
-
-    res.json({ message: "Маркирано като прочетено." });
-  });
-
   // ─── Personal Archive Routes ───────────────────────────────────────
 
   router.get("/archives/:userId", (req, res) => {
@@ -537,33 +625,6 @@ export default function messageRoutes(db: Database): Router {
     const msgId = Number(req.params.id);
     execute(db, "DELETE FROM personal_archives WHERE user_id = ? AND message_id = ?", [user.id, msgId]);
     res.json({ message: "Съобщението е възстановено от архива." });
-  });
-
-  router.post("/bulk-archive", (req, res) => {
-    const user = getUserFromRequest(db, req);
-    if (!user) return res.status(401).json({ error: "Неавторизиран достъп." });
-
-    const { ids } = req.body;
-    if (!Array.isArray(ids)) return res.status(400).json({ error: "Невалидни данни." });
-
-    for (const id of ids) {
-      const msgId = Number(id);
-      const msgRow = queryOne(db, `
-        SELECT m.*, u.first_name || ' ' || u.last_name AS author_name, u.role AS author_role, u.school AS author_school, u.class AS author_class, u.teacher_type AS author_teacher_type, u.subject AS author_subject 
-        FROM messages m JOIN users u ON m.author_id = u.id 
-        WHERE m.id = ?
-      `, [msgId]);
-
-      if (msgRow) {
-        const enriched = enrichMessage(db, msgRow);
-        const snapshot = JSON.stringify(enriched);
-        execute(db,
-          "INSERT OR REPLACE INTO personal_archives (user_id, message_id, snapshot, archived_at) VALUES (?, ?, ?, datetime('now'))",
-          [user.id, msgId, snapshot]
-        );
-      }
-    }
-    res.json({ message: `${ids.length} съобщения са архивирани.` });
   });
 
   return router;
@@ -708,7 +769,7 @@ function enrichMessage(db: Database, row: any) {
         }))
       };
     }),
-    editHistory: edits.map((e: any) => ({
+    editHistory: edits.filter((e: any) => hasActualEditChanges(e.changes)).map((e: any) => ({
       editedAt: formatSQLiteDate(e.edited_at),
       editedBy: String(e.edited_by),
       editedByName: `${e.first_name} ${e.last_name}`,
@@ -755,5 +816,71 @@ function enrichMessage(db: Database, row: any) {
       }
       return undefined;
     })()
+  };
+}
+
+function getEnrichedMessageById(db: Database, messageId: number) {
+  const row = queryOne(db,
+    `SELECT m.*, u.first_name || ' ' || u.last_name AS author_name, u.role AS author_role, u.school AS author_school, u.class AS author_class, u.teacher_type AS author_teacher_type, u.subject AS author_subject
+     FROM messages m JOIN users u ON m.author_id = u.id
+     WHERE m.id = ?`,
+    [messageId]
+  );
+
+  return row ? enrichMessage(db, row) : null;
+}
+
+function toSQLiteDate(value: string) {
+  return value.includes('T') ? value.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '') : value;
+}
+
+function hasAttachmentChanges(db: Database, messageId: number, nextAttachments: any[]) {
+  const currentAttachments = queryAll(db, "SELECT name, size, type, path FROM attachments WHERE message_id = ? ORDER BY id", [messageId]);
+  const normalize = (attachments: any[]) => attachments
+    .map((att) => ({
+      name: att.name,
+      size: att.size,
+      type: att.type,
+      path: cleanPath(att.path || att.url || ""),
+    }))
+    .sort((a, b) => `${a.name}|${a.path}`.localeCompare(`${b.name}|${b.path}`));
+
+  return JSON.stringify(normalize(currentAttachments)) !== JSON.stringify(normalize(nextAttachments));
+}
+
+function hasActualEditChanges(changes: string | null | undefined) {
+  if (!changes) return true;
+  try {
+    const parsed = JSON.parse(changes);
+    return Object.values(parsed).some(Boolean);
+  } catch {
+    return true;
+  }
+}
+
+type MessageEditAuditSnapshot = Partial<Record<'title' | 'content' | 'category' | 'importance' | 'targetAudience', unknown>>;
+
+function buildMessageEditAuditData(previousMessage: MessageEditAuditSnapshot | null, currentMessage: MessageEditAuditSnapshot | null) {
+  const fields = [
+    ['title', 'Заглавие'],
+    ['content', 'Съдържание'],
+    ['category', 'Категория'],
+    ['importance', 'Важност'],
+    ['targetAudience', 'Аудитория'],
+  ] as const;
+
+  const changes = fields.reduce((acc, [key, label]) => {
+    const fromValue = previousMessage?.[key] ?? '';
+    const toValue = currentMessage?.[key] ?? '';
+    if (fromValue !== toValue) {
+      acc[key] = { label, from: fromValue, to: toValue };
+    }
+    return acc;
+  }, {} as Record<string, { label: string; from: unknown; to: unknown }>);
+
+  return {
+    previous: previousMessage,
+    current: currentMessage,
+    changes,
   };
 }

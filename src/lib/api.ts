@@ -73,10 +73,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const authApi = {
-  async login(email: string, password: string): Promise<User> {
+  async login(email: string, password: string, skipAudit = false): Promise<User> {
     const { user, token } = await request<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, skipAudit }),
     });
     setApiToken(token);
     return user;
@@ -94,10 +94,6 @@ export const authApi = {
 export const usersApi = {
   getAll(): Promise<User[]> {
     return request<User[]>('/users');
-  },
-
-  getById(id: string): Promise<User> {
-    return request<User>(`/users/${id}`);
   },
 
   create(data: UserCreatePayload): Promise<UserCreateResponse> {
@@ -156,6 +152,7 @@ export const messagesApi = {
   },
 
   create(data: {
+    id?: string;
     title: string;
     content: string;
     category: string;
@@ -167,6 +164,8 @@ export const messagesApi = {
     commentsEnabled?: boolean;
     attachments?: Attachment[];
     links?: string[];
+    createdAt?: string;
+    updatedAt?: string;
   }): Promise<{ id: string }> {
     return request<{ id: string }>('/messages', {
       method: 'POST',
@@ -237,13 +236,6 @@ export const messagesApi = {
       method: 'DELETE',
     });
   },
-
-  bulkArchive(ids: string[]): Promise<void> {
-    return request<void>('/messages/bulk-archive', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    });
-  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -279,10 +271,6 @@ export const uploadsApi = {
 export const notificationsApi = {
   getByUser(userId: string): Promise<Notification[]> {
     return request<Notification[]>(`/notifications/${userId}`);
-  },
-
-  getUnreadCount(userId: string): Promise<{ count: number }> {
-    return request<{ count: number }>(`/notifications/${userId}/unread-count`);
   },
 
   markAsRead(id: string): Promise<void> {

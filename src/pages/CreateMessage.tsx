@@ -4,16 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useMessages } from '@/contexts/MessagesContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
-import { useAuditLog } from '@/contexts/AuditLogContext';
-import { MessageCategory, MessageStatus, MessageImportance, TargetAudience, Attachment, CATEGORY_LABELS, IMPORTANCE_LABELS, ROLE_ALLOWED_CATEGORIES } from '@/types';
+import { MessageCategory, MessageStatus, MessageImportance, TargetAudience, Attachment, CATEGORY_LABELS, IMPORTANCE_LABELS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Paperclip, X, Send, MessageSquare, Link, QrCode as QrIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, X, Send, MessageSquare, Link, QrCode as QrIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { metadataApi, uploadsApi } from '@/lib/api';
@@ -27,7 +25,6 @@ const CreateMessage: React.FC = () => {
   const { messages, createMessage, updateMessage } = useMessages();
   const { user, allUsers } = useAuth();
   const { addNotification, replaceNotificationForMessage } = useNotifications();
-  const { addEntry } = useAuditLog();
 
   const editing = id ? messages.find(m => m.id === id) : null;
 
@@ -135,11 +132,14 @@ const CreateMessage: React.FC = () => {
   // Auto-draft: create a draft automatically when user starts typing (new message only)
   const [draftId, setDraftId] = useState<string | null>(editing?.id || null);
   const draftCreated = useRef(!!editing);
+  const draftCreationPromise = useRef<Promise<string | undefined> | null>(null);
+  const isPublishing = useRef(false);
 
   useEffect(() => {
     if (editing || !user) return;
     // Auto-create draft on first meaningful input
     if (!draftCreated.current && (title.trim() || content.trim())) {
+      draftCreated.current = true;
       const createDraft = async () => {
         const finalAudience = getFinalAudience();
         const id = await createMessage({
@@ -159,20 +159,26 @@ const CreateMessage: React.FC = () => {
         });
         if (id) {
           setDraftId(id);
-          draftCreated.current = true;
+        } else {
+          draftCreated.current = false;
         }
+        return id;
       };
-      createDraft();
+      draftCreationPromise.current = createDraft().finally(() => {
+        draftCreationPromise.current = null;
+      });
     }
   }, [title, content, editing, user, category, importance, attachments, links, commentsEnabled, getFinalAudience, createMessage]);
 
   // Auto-save draft updates
   useEffect(() => {
+    if (isPublishing.current) return;
     if (!draftId) return;
     const msg = messages.find(m => m.id === draftId);
     if (!msg || msg.status !== 'draft') return;
 
     const timer = setTimeout(() => {
+      if (isPublishing.current) return;
       const finalAudience = getFinalAudience();
       updateMessage(draftId, {
         title, content, category, importance, targetAudience: finalAudience, attachments, links, commentsEnabled,
@@ -189,10 +195,6 @@ const CreateMessage: React.FC = () => {
   const allowedCategories = user
     ? categoryOptions.filter(option => user.role === 'admin' || option.key !== 'system')
     : [];
-
-  const removeAttachment = (attId: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== attId));
-  };
 
   const notifyTargetUsers = (msgTitle: string, msgId: string, type: 'new_message' | 'edited_message') => {
     if (!user) return;
@@ -230,6 +232,7 @@ const CreateMessage: React.FC = () => {
     if (!textOnly) { toast.error('Въведете съдържание'); return; }
     if (!user) return;
 
+    isPublishing.current = true;
     const status: MessageStatus = 'published';
 
     if (editing) {
@@ -247,85 +250,56 @@ const CreateMessage: React.FC = () => {
           notifyTargetUsers(title, editing.id, 'new_message');
         }
 
-        addEntry({
-          action: wasPublished ? 'Редакция на съобщение' : 'Публикуване на съобщение',
-          performedBy: user.id,
-          performedByName: `${user.firstName} ${user.lastName}`,
-          performedBySchool: user.school,
-          targetType: 'message',
-          targetId: editing.id,
-          details: `${wasPublished ? 'Редактирано' : 'Публикувано'} съобщение "${title}"${importance === 'high' ? ' (Важно)' : ''}`,
-        });
-
         toast.success('Съобщението е публикувано');
         navigate('/messages');
       } else {
-        toast.error('Грешка при публикуване');
-      }
-    } else if (draftId) {
-      const finalAudience = getFinalAudience();
-      const success = await updateMessage(draftId, {
-        title, content, category, importance, targetAudience: finalAudience, attachments, links, status,
-        commentsEnabled,
-      });
-      
-      if (success) {
-        notifyTargetUsers(title, draftId, 'new_message');
-        
-        addEntry({
-          action: 'Публикуване на съобщение',
-          performedBy: user.id,
-          performedByName: `${user.firstName} ${user.lastName}`,
-          performedBySchool: user.school,
-          targetType: 'message',
-          targetId: draftId,
-          details: `Публикувано съобщение "${title}" (от чернова)${importance === 'high' ? ' (Важно)' : ''}`,
-        });
-
-        toast.success('Съобщението е публикувано');
-        navigate('/messages');
-      } else {
+        isPublishing.current = false;
         toast.error('Грешка при публикуване');
       }
     } else {
+      const activeDraftId = draftId || (draftCreationPromise.current ? await draftCreationPromise.current : null);
       const finalAudience = getFinalAudience();
-      const msgId = await createMessage({
-        title, content, category, importance, status,
-        targetAudience: finalAudience,
-        authorId: user.id,
-        authorName: `${user.firstName} ${user.lastName}`,
-        authorSchool: user.school,
-        attachments,
-        links,
-        commentsEnabled,
-        comments: [],
-      });
 
-      if (msgId) {
-        notifyTargetUsers(title, msgId, 'new_message');
-
-        addEntry({
-          action: 'Публикуване на съобщение',
-          performedBy: user.id,
-          performedByName: `${user.firstName} ${user.lastName}`,
-          performedBySchool: user.school,
-          targetType: 'message',
-          targetId: msgId,
-          details: `Публикувано "${title}"`,
+      if (activeDraftId) {
+        const success = await updateMessage(activeDraftId, {
+          title, content, category, importance, targetAudience: finalAudience, attachments, links, status,
+          commentsEnabled,
         });
 
-        toast.success('Съобщението е публикувано');
-        navigate('/messages');
+        if (success) {
+          setDraftId(null);
+          notifyTargetUsers(title, activeDraftId, 'new_message');
+
+          toast.success('Съобщението е публикувано');
+          navigate('/messages');
+        } else {
+          isPublishing.current = false;
+          toast.error('Грешка при публикуване');
+        }
       } else {
-        toast.error('Грешка при създаване');
+        const msgId = await createMessage({
+          title, content, category, importance, status,
+          targetAudience: finalAudience,
+          authorId: user.id,
+          authorName: `${user.firstName} ${user.lastName}`,
+          authorSchool: user.school,
+          attachments,
+          links,
+          commentsEnabled,
+          comments: [],
+        });
+
+        if (msgId) {
+          notifyTargetUsers(title, msgId, 'new_message');
+
+          toast.success('Съобщението е публикувано');
+          navigate('/messages');
+        } else {
+          isPublishing.current = false;
+          toast.error('Грешка при създаване');
+        }
       }
     }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const addAsLink = () => {

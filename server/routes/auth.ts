@@ -33,7 +33,7 @@ export default function authRoutes(db: Database): Router {
 
   // ─── POST /api/auth/login ─────────────────────────────────────────
   router.post("/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, skipAudit } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: "Имейл и парола са задължителни." });
@@ -62,12 +62,14 @@ export default function authRoutes(db: Database): Router {
     const mappedUser = mapUser(user);
     const token = signToken({ id: Number(mappedUser.id) });
 
-    // Одит: регистриране на успешен вход
-    execute(db,
-      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-       VALUES ('Вход в системата', ?, 'user', ?, ?)`,
-      [user.id, String(user.id), `${user.first_name} ${user.last_name} влезе в системата`]
-    );
+    // Одит: регистриране на реален успешен вход само за одобрени профили.
+    if (!skipAudit && user.registration_status === 'approved') {
+      execute(db,
+        `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
+         VALUES ('Вход в системата', ?, 'user', ?, ?)`,
+        [user.id, String(user.id), `${user.first_name} ${user.last_name} влезе в системата`]
+      );
+    }
 
     res.json({ user: mappedUser, token });
   });

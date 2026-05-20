@@ -116,7 +116,7 @@ const Register: React.FC = () => {
         class: finalClass,
       });
       if (result.success) {
-        if (result.user?.registrationStatus === 'pending') {
+        if (result.registrationStatus === 'pending') {
           toast.success('Регистрацията е изпратена и чака одобрение от администратор.');
         } else {
           toast.success('Успешна регистрация!');

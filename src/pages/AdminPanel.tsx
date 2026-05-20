@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import ScrollToTop from '@/components/ScrollToTop';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { bg } from 'date-fns/locale';
@@ -107,8 +106,9 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   user: 'ПОТРЕБИТЕЛ',
   comment: 'КОМЕНТАР',
   class: 'КЛАС',
-  school: 'УЧИЛИЩЕ',
-  category: 'КАТЕГОРИЯ',
+  setting: 'НАСТРОЙКА',
+  draft: 'ЧЕРНОВА',
+  archive: 'АРХИВ',
 };
 
 const InfoBlock: React.FC<{ label: string; value: string }> = ({ label, value }) => (
@@ -118,10 +118,34 @@ const InfoBlock: React.FC<{ label: string; value: string }> = ({ label, value })
   </div>
 );
 
+const getAuditValue = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Да' : 'Не';
+  return String(value);
+};
+
+const getMessageTitleFromDetails = (details: string) => details.match(/"([^"]+)"/)?.[1] || '';
+
+const getPublishedMessageFallbackSnapshot = (details: string) => ({
+  title: getMessageTitleFromDetails(details) || '(Без заглавие)',
+  content: 'Пълното съдържание не е запазено в този стар журнален запис.',
+  category: details.match(/Категория:\s*([^|]+)/)?.[1]?.trim() || '—',
+  importance: details.match(/Важност:\s*([^|]+)/)?.[1]?.trim() || '—',
+  authorName: '—',
+});
+
+const getDeletedMessageFallbackSnapshot = (details: string, sourceDetails?: string) => ({
+  title: getMessageTitleFromDetails(details) || '(Без заглавие)',
+  content: 'Пълното съдържание не е запазено в този стар журнален запис.',
+  category: (sourceDetails || details).match(/Категория:\s*([^|]+)/)?.[1]?.trim() || '—',
+  importance: (sourceDetails || details).match(/Важност:\s*([^|]+)/)?.[1]?.trim() || '—',
+  authorName: '—',
+});
+
 const AdminPanel: React.FC = () => {
   const { user, systemUsers, isGlobalAdmin, activeSchoolScope } = useAuth();
   const { entries: auditEntries, deleteEntry, addEntry } = useAuditLog();
-  const { messages: allVisibleMessages, createMessage, deleteMessage, deleteComment } = useMessages();
+  const { messages: allVisibleMessages, deleteMessage, deleteComment } = useMessages();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -524,8 +548,8 @@ const AdminPanel: React.FC = () => {
       const data = JSON.parse(entry.targetData);
 
       if (entry.targetType === 'message') {
-        const { id, createdAt, updatedAt, ...rest } = data;
-        await createMessage(rest);
+        const { messageExists, editHistory, targetUser, targetUsers, authorRole, authorClass, authorTeacherType, authorSubject, ...rest } = data;
+        await messagesApi.create(rest);
       } else if (entry.targetType === 'comment') {
         // We restore comment to the same message if it exists
         if (data.messageId) {
@@ -1008,7 +1032,7 @@ const AdminPanel: React.FC = () => {
               </CardHeader>
               <CardContent className="grid gap-4 p-8">
                 {filteredAudit.map(entry => (
-                  <div key={entry.id} className="flex items-start justify-between gap-5 rounded-[1.75rem] border border-primary/5 bg-card/50 p-6 transition-all duration-300 hover:shadow-lg cursor-pointer hover:bg-muted/30" onClick={() => setSelectedAuditEntry(entry)}>
+                    <div key={entry.id} className="flex items-start justify-between gap-5 rounded-[1.75rem] border border-primary/5 bg-card/50 p-6 transition-all duration-300 hover:shadow-lg cursor-pointer hover:bg-muted/30" onClick={() => setSelectedAuditEntry(entry)}>
                     <div className="mt-1.5 rounded-2xl bg-white p-3 text-primary shadow-sm dark:bg-slate-800">
                       <ClipboardList className="h-5 w-5" />
                     </div>
@@ -1497,6 +1521,27 @@ const AdminPanel: React.FC = () => {
               const targetMessage = targetMessageId ? allVisibleMessages.find(m => m.id === String(targetMessageId)) : null;
               const targetUser = entry.targetType === 'user' ? systemUsers.find(u => u.id === entry.targetId) : null;
               const targetClass = entry.targetType === 'class' ? sortedClasses.find(c => c.id === entry.targetId) : null;
+              const isMessageEditAction = entry.action === 'Редакция на съобщение' && entry.targetType === 'message';
+              const isMessagePublishAction = entry.action === 'Публикуване на съобщение' && entry.targetType === 'message';
+              const isMessageDeleteAction = entry.action === 'Изтриване на съобщение' && entry.targetType === 'message';
+              const isAddedCommentAction = entry.action === 'Добавен коментар' && entry.targetType === 'comment';
+              const editPrevious = isMessageEditAction ? snapshotData?.previous : null;
+              const editCurrent = isMessageEditAction ? (snapshotData?.current || targetMessage) : null;
+              const editChanges = isMessageEditAction && snapshotData?.changes && typeof snapshotData.changes === 'object'
+                ? Object.entries(snapshotData.changes as Record<string, { label?: string; from?: unknown; to?: unknown }>)
+                : [];
+              const publishFallback = isMessagePublishAction ? getPublishedMessageFallbackSnapshot(entry.details) : null;
+              const publishMessage = isMessagePublishAction ? (targetMessage || snapshotData || publishFallback) : null;
+              const publishTitle = publishMessage?.title || getMessageTitleFromDetails(entry.details) || `(Съобщение #${entry.targetId})`;
+              const canOpenPublishedMessage = Boolean(targetMessage || snapshotData?.messageExists);
+              const relatedPublishEntry = isMessageDeleteAction
+                ? auditEntries.find(item => item.action === 'Публикуване на съобщение' && item.targetType === 'message' && item.targetId === entry.targetId)
+                : null;
+              const deleteFallback = isMessageDeleteAction ? getDeletedMessageFallbackSnapshot(entry.details, relatedPublishEntry?.details) : null;
+              const deletedMessage = isMessageDeleteAction ? (snapshotData || deleteFallback) : null;
+              const deletedTitle = deletedMessage?.title || getMessageTitleFromDetails(entry.details) || `(Съобщение #${entry.targetId})`;
+              const commentMessageTitle = targetMessage?.title || snapshotData?.messageTitle || getMessageTitleFromDetails(entry.details) || 'Свързано съобщение';
+              const canOpenCommentMessage = Boolean(snapshotData?.messageId && (targetMessage || snapshotData?.messageExists));
 
               const isDeleted = !targetMessage && !targetUser && !targetClass && entry.targetId;
 
@@ -1522,7 +1567,134 @@ const AdminPanel: React.FC = () => {
                       </div>
                     </div>
 
-                    {targetMessage && entry.targetType === 'message' && (
+                    {isMessageEditAction && (
+                      <div className="space-y-5 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-foreground">Редакция на съобщение</h3>
+                            <p className="mt-1 text-sm font-medium text-muted-foreground">Сравнение между предишното и новото съдържание.</p>
+                          </div>
+                          <Badge className="bg-blue-500/10 text-blue-600 hover:bg-blue-500/10">Преди / След</Badge>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedAuditEntry(null);
+                            navigate(`/messages/${entry.targetId}`);
+                          }}
+                          className="block w-full text-left group/link"
+                        >
+                          <div className="rounded-2xl border border-primary/10 bg-primary/5 p-5 transition-all hover:border-primary/30 hover:bg-primary/10">
+                            <div className="flex items-center justify-between mb-3 border-b border-primary/10 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-primary">Към редактираното съобщение</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-primary opacity-0 group-hover/link:opacity-100 transition-opacity">Прегледай съобщението →</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground group-hover/link:text-primary transition-colors">
+                              {editCurrent?.title || targetMessage?.title || getMessageTitleFromDetails(entry.details) || `(Съобщение #${entry.targetId})`}
+                            </h4>
+                          </div>
+                        </button>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 p-5">
+                            <p className="text-xs font-black uppercase tracking-widest text-amber-600">Преди редакцията</p>
+                            <h4 className="mt-3 text-base font-black text-foreground">{editPrevious?.title || 'Няма запазено старо заглавие'}</h4>
+                            <p className="mt-2 text-sm font-medium text-muted-foreground line-clamp-6">
+                              {editPrevious?.content ? getContentPreview(editPrevious.content) : 'Няма запазено старо съдържание.'}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-5">
+                            <p className="text-xs font-black uppercase tracking-widest text-emerald-600">След редакцията</p>
+                            <h4 className="mt-3 text-base font-black text-foreground">{editCurrent?.title || targetMessage?.title || getMessageTitleFromDetails(entry.details) || 'Без заглавие'}</h4>
+                            <p className="mt-2 text-sm font-medium text-muted-foreground line-clamp-6">
+                              {editCurrent?.content ? getContentPreview(editCurrent.content) : 'Няма запазено ново съдържание.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        
+                      </div>
+                    )}
+
+                    {isMessagePublishAction && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-foreground">Публикувано съобщение</h3>
+                            <p className="mt-1 text-sm font-medium text-muted-foreground">Информация за съобщението от journal записа.</p>
+                          </div>
+                          <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/10">Публикувано</Badge>
+                        </div>
+
+                        {canOpenPublishedMessage ? (
+                          <button
+                            onClick={() => {
+                              setSelectedAuditEntry(null);
+                              navigate(`/messages/${entry.targetId}`);
+                            }}
+                            className="block w-full text-left group/link"
+                          >
+                            <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-5 transition-all hover:border-emerald-500/30 hover:bg-emerald-500/10">
+                              <div className="flex items-center justify-between mb-3 border-b border-emerald-500/10 pb-2">
+                                <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Към публикуваното съобщение</p>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 opacity-0 group-hover/link:opacity-100 transition-opacity">Прегледай съобщението →</span>
+                              </div>
+                              <h4 className="text-base font-black text-foreground group-hover/link:text-emerald-600 transition-colors mb-2">{publishTitle}</h4>
+                              <p className="text-sm font-medium text-muted-foreground line-clamp-4 group-hover/link:text-foreground transition-colors">
+                                {publishMessage?.content ? getContentPreview(publishMessage.content) : entry.details}
+                              </p>
+                            </div>
+                          </button>
+                        ) : (
+                          <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-5">
+                            <div className="flex items-center justify-between mb-3 border-b border-emerald-500/10 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Преглед на публикуваното съобщение</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground mb-2">{publishTitle}</h4>
+                            <p className="text-sm font-medium text-muted-foreground line-clamp-4">
+                              {publishMessage?.content ? getContentPreview(publishMessage.content) : entry.details}
+                            </p>
+                          </div>
+                        )}
+
+                        {publishMessage && (
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <InfoBlock label="Категория" value={CATEGORY_LABELS[publishMessage.category] || publishMessage.category || '—'} />
+                            <InfoBlock label="Аудитория" value={publishMessage.targetAudience ? getAudiencePreview(publishMessage.targetAudience, systemUsers) : '—'} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {isMessageDeleteAction && deletedMessage && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-foreground">Изтрито съобщение</h3>
+                            <p className="mt-1 text-sm font-medium text-muted-foreground">Информацията е запазена от journal записа за изтриването.</p>
+                          </div>
+                          <Badge className="bg-rose-500/10 text-rose-600 hover:bg-rose-500/10">Изтрито</Badge>
+                        </div>
+
+                        <div className="rounded-2xl border border-rose-500/15 bg-rose-500/5 p-5">
+                          <div className="flex items-center justify-between mb-3 border-b border-rose-500/10 pb-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-rose-600">Преглед на изтритото съобщение</p>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
+                          </div>
+                          <h4 className="text-base font-black text-foreground mb-2">{deletedTitle}</h4>
+                          <p className="text-sm font-medium text-muted-foreground line-clamp-4">
+                            {deletedMessage?.content ? getContentPreview(deletedMessage.content) : entry.details}
+                          </p>
+                        </div>
+
+                        <div className="grid gap-4">
+                          <InfoBlock label="Категория" value={CATEGORY_LABELS[deletedMessage.category] || deletedMessage.category || '—'} />
+                        </div>
+                      </div>
+                    )}
+
+                    {targetMessage && entry.targetType === 'message' && !isMessageEditAction && !isMessagePublishAction && !isMessageDeleteAction && (
                       <div className="space-y-4 border-t border-primary/10 pt-6">
                         <div className="flex items-center justify-between">
                           <h3 className="font-bold text-foreground">Свързано съобщение</h3>
@@ -1554,17 +1726,67 @@ const AdminPanel: React.FC = () => {
                       </div>
                     )}
 
-                    {!targetMessage && entry.targetType === 'message' && snapshotData && (
+                    {!targetMessage && entry.targetType === 'message' && snapshotData && !isMessageEditAction && !isMessagePublishAction && !isMessageDeleteAction && (
                       <div className="space-y-4 border-t border-primary/10 pt-6">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-bold text-foreground">Свързано съобщение (Изтрито)</h3>
-                          <Badge variant="destructive" className="text-[10px]">Изтрито</Badge>
+                          <h3 className="font-bold text-foreground">Свързано съобщение</h3>
+                          <Badge variant="outline" className="text-[10px]">Snapshot</Badge>
                         </div>
                         <div className="grid gap-4">
-                          <div className="rounded-2xl border border-destructive/10 bg-destructive/5 p-5 opacity-80">
-                            <div className="flex items-center justify-between mb-3 border-b border-destructive/5 pb-2">
-                              <p className="text-xs font-black uppercase tracking-widest text-destructive/70">Преглед на съдържанието</p>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-destructive">Недостъпно</span>
+                          <div className="rounded-2xl border border-primary/10 bg-muted/20 p-5">
+                            <div className="flex items-center justify-between mb-3 border-b border-primary/5 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Преглед на съдържанието</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground mb-2">{snapshotData.title || '(Без заглавие)'}</h4>
+                            <p className="text-sm font-medium text-muted-foreground line-clamp-4">
+                              {getContentPreview(snapshotData.content)}
+                            </p>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <InfoBlock label="Категория" value={CATEGORY_LABELS[snapshotData.category] || snapshotData.category} />
+                            <InfoBlock label="Автор (Snapshot)" value={snapshotData.authorName} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {entry.targetType === 'draft' && snapshotData && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-foreground">Свързана чернова</h3>
+                          <Badge variant="outline" className="text-[10px]">Чернова</Badge>
+                        </div>
+                        <div className="grid gap-4">
+                          <div className="rounded-2xl border border-primary/10 bg-muted/20 p-5">
+                            <div className="flex items-center justify-between mb-3 border-b border-primary/5 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Преглед на съдържанието</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground mb-2">{snapshotData.title || '(Без заглавие)'}</h4>
+                            <p className="text-sm font-medium text-muted-foreground line-clamp-4">
+                              {getContentPreview(snapshotData.content)}
+                            </p>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <InfoBlock label="Категория" value={CATEGORY_LABELS[snapshotData.category] || snapshotData.category} />
+                            <InfoBlock label="Автор (Snapshot)" value={snapshotData.authorName} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {entry.targetType === 'archive' && snapshotData && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-foreground">Свързан архив</h3>
+                          <Badge variant="outline" className="text-[10px]">Архив</Badge>
+                        </div>
+                        <div className="grid gap-4">
+                          <div className="rounded-2xl border border-primary/10 bg-muted/20 p-5">
+                            <div className="flex items-center justify-between mb-3 border-b border-primary/5 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Преглед на съдържанието</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
                             </div>
                             <h4 className="text-base font-black text-foreground mb-2">{snapshotData.title || '(Без заглавие)'}</h4>
                             <p className="text-sm font-medium text-muted-foreground line-clamp-4">
@@ -1604,7 +1826,53 @@ const AdminPanel: React.FC = () => {
                       </div>
                     )}
 
-                    {entry.targetType === 'comment' && snapshotData && (
+                    {isAddedCommentAction && snapshotData && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-foreground">Добавен коментар</h3>
+                            <p className="mt-1 text-sm font-medium text-muted-foreground">Коментарът е записан към съобщение в системата.</p>
+                          </div>
+                          <Badge className="bg-sky-500/10 text-sky-600 hover:bg-sky-500/10">Коментар</Badge>
+                        </div>
+
+                        <div className="rounded-2xl border border-sky-500/15 bg-sky-500/5 p-5">
+                          <div className="flex items-center justify-between mb-3 border-b border-sky-500/10 pb-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-sky-600">Съдържание на коментара</p>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Само за четене</span>
+                          </div>
+                          <p className="text-sm font-medium text-foreground italic">"{snapshotData.content || 'Няма запазено съдържание.'}"</p>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <InfoBlock label="Автор на коментара" value={snapshotData.authorName || entry.performedByName || '—'} />
+                          <InfoBlock label="Свързано съобщение" value={commentMessageTitle} />
+                        </div>
+
+                        {canOpenCommentMessage && (
+                          <button
+                            onClick={() => {
+                              setSelectedAuditEntry(null);
+                              navigate(`/messages/${snapshotData.messageId}`);
+                            }}
+                            className="block w-full text-left group/msg-link"
+                          >
+                            <div className="flex items-center gap-3 p-4 rounded-xl border border-primary/10 bg-primary/5 hover:border-primary/30 transition-all">
+                              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                                <Mail size={16} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Към съобщението</p>
+                                <p className="text-sm font-bold text-foreground truncate">{commentMessageTitle}</p>
+                              </div>
+                              <span className="text-xs font-black text-primary">Виж съобщението →</span>
+                            </div>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {entry.targetType === 'comment' && snapshotData && !isAddedCommentAction && (
                       <div className="space-y-4 border-t border-primary/10 pt-6">
                         <div className="flex items-center justify-between">
                           <h3 className="font-bold text-foreground">Свързан коментар</h3>
@@ -1663,9 +1931,96 @@ const AdminPanel: React.FC = () => {
                       </div>
                     )}
 
-                    {!targetMessage && !targetUser && !targetClass && entry.targetId && (
-                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 mt-2">
-                        <p className="text-sm font-medium text-amber-600">Обектът (ID: {entry.targetId}) вече не съществува в системата (вероятно е бил изтрит).</p>
+                    {!targetUser && entry.targetType === 'user' && snapshotData && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-foreground">Свързан потребител (Изтрит)</h3>
+                          <Badge variant="destructive" className="text-[10px]">Изтрит</Badge>
+                        </div>
+                        <div className="grid gap-4">
+                          <div className="rounded-2xl border border-destructive/10 bg-destructive/5 p-5 opacity-80">
+                            <div className="flex items-center justify-between mb-3 border-b border-destructive/5 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-destructive/70">Преглед на профила</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-destructive">Недостъпен</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground mb-2">{snapshotData.firstName} {snapshotData.lastName}</h4>
+                            <p className="text-sm font-medium text-muted-foreground">{snapshotData.email}</p>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <InfoBlock label="Роля" value={ROLE_LABELS[snapshotData.role] || snapshotData.role} />
+                            <InfoBlock label="Училище" value={snapshotData.school} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!targetClass && entry.targetType === 'class' && snapshotData && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-foreground">Свързан клас (Изтрит)</h3>
+                          <Badge variant="destructive" className="text-[10px]">Изтрит</Badge>
+                        </div>
+                        <div className="grid gap-4">
+                          <div className="rounded-2xl border border-destructive/10 bg-destructive/5 p-5 opacity-80">
+                            <div className="flex items-center justify-between mb-3 border-b border-destructive/5 pb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-destructive/70">Детайли за класа</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-destructive">Недостъпен</span>
+                            </div>
+                            <h4 className="text-base font-black text-foreground mb-2">{snapshotData.name}</h4>
+                            <p className="text-sm font-medium text-muted-foreground">{snapshotData.school}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isDeleted && !isMessageEditAction && !isMessagePublishAction && !isMessageDeleteAction && !(snapshotData && (entry.targetType === 'message' || entry.targetType === 'comment' || entry.targetType === 'user' || entry.targetType === 'class' || entry.targetType === 'draft' || entry.targetType === 'archive')) && (
+                      <div className="space-y-4 border-t border-primary/10 pt-6">
+                        <h3 className="font-bold text-foreground">
+                          {(() => {
+                            const linkedLabels: Record<string, string> = { message: 'съобщение', user: 'потребител', comment: 'коментар', class: 'клас', setting: 'настройка', draft: 'чернова', archive: 'архив' };
+                            return `Свързан ${linkedLabels[entry.targetType] || 'обект'}`;
+                          })()}
+                        </h3>
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
+                          <div className="flex items-center justify-between mb-3 border-b border-amber-500/10 pb-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-amber-600">
+                              {(() => {
+                                const detailLabels: Record<string, string> = { message: 'съобщението', user: 'потребителя', comment: 'коментара', class: 'класа', setting: 'настройката', draft: 'черновата', archive: 'архива' };
+                                return `Детайли за ${detailLabels[entry.targetType] || 'обекта'}`;
+                              })()}
+                            </p>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Недостъпно</span>
+                          </div>
+                          <p className="text-sm font-medium text-amber-600">
+                            {(() => {
+                              const typeName: Record<string, string> = { message: 'Съобщението', user: 'Потребителят', comment: 'Коментарът', class: 'Класът', setting: 'Настройката', draft: 'Черновата', archive: 'Архивът' };
+                              const typeLabel = typeName[entry.targetType] || 'Обектът';
+                              let objName = null;
+                              if (snapshotData) {
+                                if ((entry.targetType === 'message' || entry.targetType === 'draft' || entry.targetType === 'archive') && snapshotData.title) objName = `„${snapshotData.title}“`;
+                                else if (entry.targetType === 'user' && (snapshotData.firstName || snapshotData.lastName)) {
+                                  const name = `${snapshotData.firstName || ''} ${snapshotData.lastName || ''}`.trim();
+                                  objName = `„${name}“`;
+                                }
+                                else if (entry.targetType === 'class' && snapshotData.name) objName = `„${snapshotData.name}“`;
+                                else if (entry.targetType === 'comment') {
+                                  if (snapshotData.authorName && snapshotData.content) objName = `от ${snapshotData.authorName} („${snapshotData.content.length > 40 ? snapshotData.content.slice(0, 40) + '...' : snapshotData.content}“)`;
+                                  else if (snapshotData.authorName) objName = `от ${snapshotData.authorName}`;
+                                  else if (snapshotData.content) objName = `„${snapshotData.content.length > 40 ? snapshotData.content.slice(0, 40) + '...' : snapshotData.content}“`;
+                                }
+                              }
+                              if (!objName && entry.details) {
+                                const match = entry.details.match(/"([^"]+)"/);
+                                if (match) objName = `„${match[1]}“`;
+                              }
+                              const genderPhrase: Record<string, string> = { message: 'вероятно е било изтрито', user: 'вероятно е бил изтрит', comment: 'вероятно е бил изтрит', class: 'вероятно е бил изтрит', setting: 'вероятно е била изтрита', draft: 'вероятно е била изтрита', archive: 'вероятно е бил изтрит' };
+                              if (objName) {
+                                return `${typeLabel} ${objName} вече не съществува в системата (${genderPhrase[entry.targetType] || 'вероятно е бил изтрит'}).`;
+                              }
+                              return `${typeLabel} (ID: ${entry.targetId}) вече не съществува в системата (${genderPhrase[entry.targetType] || 'вероятно е бил изтрит'}).`;
+                            })()}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1892,7 +2247,6 @@ const AdminPanel: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <ScrollToTop />
     </>
   );
 };
@@ -1952,7 +2306,5 @@ const StatCard: React.FC<{ label: string; value: string; accent?: boolean }> = (
     </div>
   );
 };
-
-
 
 export default AdminPanel;

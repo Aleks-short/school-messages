@@ -10,12 +10,6 @@ export default function userRoutes(db: Database): Router {
   const isGlobalAdmin = (user: any) => user?.role === 'admin' && !user?.school;
   const isDirector = (user: any) => user?.role === 'director' && !!user?.school;
 
-  const getUserById = (id: number) => queryOne(db,
-    `SELECT id, email, first_name, last_name, role, registration_status, registration_review_note, registration_reviewed_at, school, class, pending_class, avatar, subject, pending_subject, teacher_type, pending_teacher_type, management_position, class_number
-     FROM users WHERE id = ?`,
-    [id]
-  );
-
   const canDirectorManageTarget = (manager: any, target: any) => {
     if (!isDirector(manager) || !target) return false;
     return target.school === manager.school && ['teacher', 'student'].includes(target.role);
@@ -23,11 +17,11 @@ export default function userRoutes(db: Database): Router {
 
   const canManageTarget = (manager: any, target: any) => isGlobalAdmin(manager) || canDirectorManageTarget(manager, target);
 
-  const addAuditEntry = (performedBy: number, targetId: number, details: string, action: string = 'Управление на потребител') => {
+  const addAuditEntry = (performedBy: number, targetId: number, details: string, action: string = 'Управление на потребител', targetData?: string) => {
     execute(db,
-      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-       VALUES (?, ?, 'user', ?, ?)`,
-      [action, performedBy, String(targetId), details]
+      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+       VALUES (?, ?, 'user', ?, ?, ?)`,
+      [action, performedBy, String(targetId), details, targetData || null]
     );
   };
 
@@ -72,22 +66,6 @@ export default function userRoutes(db: Database): Router {
     res.json(rows.map(mapUser));
   });
 
-  // ─── GET /api/users/:id ───────────────────────────────────────────
-  router.get("/:id", (req, res) => {
-    const user = getUserFromRequest(db, req);
-    if (!user) return res.status(401).json({ error: "Неавторизиран достъп." });
-
-    const row = getUserById(Number(req.params.id));
-
-    if (!row) return res.status(404).json({ error: "Потребителят не е намерен." });
-
-    if (!isGlobalAdmin(user) && user.id !== row.id && row.school !== user.school) {
-      return res.status(403).json({ error: "Нямате достъп до този профил." });
-    }
-
-    res.json(mapUser(row));
-  });
-
   // ─── POST /api/users ──────────────────────────────────────────────
   router.post("/", async (req, res) => {
     const { email, password, firstName, lastName, role, school, class: cls, subject, teacherType, managementPosition } = req.body;
@@ -97,12 +75,10 @@ export default function userRoutes(db: Database): Router {
     }
 
     // Проверка за дубликат
-    console.log(`[DEBUG] Received request to create user: ${email}`);
     const existing = queryOne(db, "SELECT id FROM users WHERE email = ?", [email]);
     
     // По-строга проверка за съществуващ потребител
     if (existing && existing.id) {
-      console.log(`[DEBUG] Duplicate found for ${email}:`, JSON.stringify(existing));
       return res.status(409).json({ error: "Потребител с този имейл вече съществува." });
     }
 
@@ -121,9 +97,9 @@ export default function userRoutes(db: Database): Router {
 
     // Одит: регистриране на профил (опит за регистрация)
     execute(db,
-      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details)
-       VALUES (?, ?, ?, ?, ?)`,
-      ['Регистриране на профил', userId, 'user', String(userId), `Нов потребител: ${firstName} ${lastName} (${email}), Роля: ${role}`]
+      `INSERT INTO audit_log (action, performed_by, target_type, target_id, details, target_data)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ['Регистриране на профил', userId, 'user', String(userId), `Нов потребител: ${firstName} ${lastName} (${email}), Роля: ${role}`, JSON.stringify({ id: String(userId), firstName, lastName, email, role, school })]
     );
 
     if (registrationStatus === 'pending') {
@@ -382,7 +358,14 @@ export default function userRoutes(db: Database): Router {
     const result = execute(db, "DELETE FROM users WHERE id = ?", [targetId]);
     if (result.changes === 0) return res.status(404).json({ error: "Потребителят не е намерен." });
 
-    addAuditEntry(user.id, targetId, `Изтрит потребител: ${targetUser.first_name} ${targetUser.last_name} (${targetUser.email})`, 'Изтриване на потребител');
+    addAuditEntry(user.id, targetId, `Изтрит потребител: ${targetUser.first_name} ${targetUser.last_name} (${targetUser.email})`, 'Административна промяна', JSON.stringify({
+      id: String(targetId),
+      firstName: targetUser.first_name,
+      lastName: targetUser.last_name,
+      email: targetUser.email,
+      role: targetUser.role,
+      school: targetUser.school
+    }));
     res.json({ message: "Потребителят е изтрит успешно." });
   });
 
