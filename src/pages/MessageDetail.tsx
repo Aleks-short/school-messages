@@ -241,41 +241,11 @@ const MessageDetail: React.FC = () => {
       return;
     }
 
-    const wasArchived = archived;
-
-    if (wasArchived && !force) {
-      const archivedAt = getArchivedAt(message.id);
-      if (archivedAt) {
-        const archivedTime = new Date(archivedAt).getTime();
-        const lastMsgUpdate = new Date(message.updatedAt).getTime();
-        const lastCommentTime = message.comments && message.comments.length > 0
-          ? Math.max(...message.comments.map(c => new Date(c.createdAt).getTime()))
-          : 0;
-
-        if (lastMsgUpdate <= archivedTime && lastCommentTime <= archivedTime) {
-          toast.info("Архивът вече е актуален. Няма нови промени за обновяване.");
-          return;
-        }
-      }
-    }
-
     const { alreadyArchived, success } = await toggleArchive(message.id, force);
 
     if (alreadyArchived && !force) {
       setShowOverwriteDialog(true);
       return;
-    }
-
-    if (success) {
-      if (!wasArchived && user) {
-        toast.success('Съобщението е преместено в личния ви архив');
-      } else if (wasArchived && force) {
-        toast.success('Архивът е обновен с новата версия на съобщението');
-      } else if (wasArchived && !force) {
-        // This was actually an unarchive (restore) if toggleArchive deleted it.
-        // Wait, our toggleArchive in MessagesContext handles both.
-        // If it was already archived and we didn't force, it returned alreadyArchived: true.
-      }
     }
   };
 
