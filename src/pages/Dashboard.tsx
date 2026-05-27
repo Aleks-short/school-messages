@@ -192,7 +192,7 @@ const Dashboard: React.FC = () => {
   const hasMoreActivities = visibleActivities.length < allActivities.length;
 
   const handleSelectActivity = (id: string) => {
-    setSelectedActivityIds(prev => 
+    setSelectedActivityIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -247,7 +247,7 @@ const Dashboard: React.FC = () => {
               break;
             }
           }
-          
+
           if (foundComment) {
             addEntry({
               action: 'Изтрит коментар',
@@ -470,9 +470,9 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3 flex-wrap justify-end">
               {allActivities.length > 0 && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-xl shadow-sm border border-primary/5">
-                  <Checkbox 
-                    id="select-all-activities" 
-                    checked={selectedActivityIds.length === visibleActivities.length && visibleActivities.length > 0} 
+                  <Checkbox
+                    id="select-all-activities"
+                    checked={selectedActivityIds.length === visibleActivities.length && visibleActivities.length > 0}
                     onCheckedChange={handleSelectAllActivities}
                     className="rounded-md border-primary/30"
                   />
@@ -508,25 +508,23 @@ const Dashboard: React.FC = () => {
                 return (
                   <div
                     key={idx}
-                    className={`p-5 rounded-2xl border transition-all duration-300 group/item flex flex-col justify-between relative ${
-                      isSelected 
-                        ? 'bg-primary/5 border-primary/20 shadow-lg' 
+                    className={`p-5 rounded-2xl border transition-all duration-300 group/item flex flex-col justify-between relative ${isSelected
+                        ? 'bg-primary/5 border-primary/20 shadow-lg'
                         : 'bg-white/50 dark:bg-card/40 hover:bg-white dark:hover:bg-card/60 hover:shadow-xl'
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <div className="relative group/tooltip flex items-center">
-                          <div 
-                            className={`p-2 rounded-lg cursor-help transition-all ${
-                            item.type === 'sent' 
-                              ? (item.data.category === 'system' ? 'bg-red-500/10 text-red-500' :
-                                 item.data.category === 'administrative' ? 'bg-blue-500/10 text-blue-500' :
-                                 item.data.category === 'academic' ? 'bg-green-500/10 text-green-600' :
-                                 item.data.category === 'personal' ? 'bg-purple-500/10 text-purple-600' :
-                                 'bg-primary/10 text-primary')
-                              : 'bg-success/10 text-success'
-                          }`}>
+                          <div
+                            className={`p-2 rounded-lg cursor-help transition-all ${item.type === 'sent'
+                                ? (item.data.category === 'system' ? 'bg-red-500/10 text-red-500' :
+                                  item.data.category === 'administrative' ? 'bg-blue-500/10 text-blue-500' :
+                                    item.data.category === 'academic' ? 'bg-green-500/10 text-green-600' :
+                                      item.data.category === 'personal' ? 'bg-purple-500/10 text-purple-600' :
+                                        'bg-primary/10 text-primary')
+                                : 'bg-success/10 text-success'
+                              }`}>
                             {item.type === 'sent' ? <Send className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
                           </div>
                         </div>
@@ -559,8 +557,8 @@ const Dashboard: React.FC = () => {
                         Преглед <ArrowRight className="h-3 w-3 group-hover/item:translate-x-1 transition-transform" />
                       </Link>
                       <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                        <Checkbox 
-                          checked={isSelected} 
+                        <Checkbox
+                          checked={isSelected}
                           onCheckedChange={() => handleSelectActivity(activityId)}
                           className="h-6 w-6 rounded-lg border-2 border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary shadow-xl bg-card/80 backdrop-blur-sm transition-transform hover:scale-110 active:scale-90"
                         />
@@ -613,7 +611,7 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="hidden sm:block">
                     <p className="text-white font-black text-sm leading-tight">Избрани активности</p>
-                    <button 
+                    <button
                       onClick={() => setSelectedActivityIds([])}
                       className="text-[10px] text-white/50 uppercase font-black tracking-widest hover:text-white transition-colors flex items-center gap-1"
                     >
@@ -621,11 +619,11 @@ const Dashboard: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button 
+                      <Button
                         variant="destructive"
                         className="rounded-2xl font-black h-12 px-8 flex items-center gap-2 shadow-xl shadow-destructive/20 transition-all active:scale-95"
                       >
@@ -642,7 +640,7 @@ const Dashboard: React.FC = () => {
                       </AlertDialogHeader>
                       <AlertDialogFooter className="mt-6">
                         <AlertDialogCancel className="rounded-2xl h-12 font-bold px-6">Отказ</AlertDialogCancel>
-                        <AlertDialogAction 
+                        <AlertDialogAction
                           onClick={handleBulkActivityDelete}
                           className="rounded-2xl h-12 font-black px-8 bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
